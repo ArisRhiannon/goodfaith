@@ -5,9 +5,34 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-31
+
+Second hardening pass plus a relicense, from continued review.
+
 ### Changed
-- Relicensed under the **MIT License** (was AGPL-3.0 + commercial). goodfaith is
-  now permissively licensed for the self-hosted Discord-bot ecosystem.
+- **Relicensed under the MIT License** (was AGPL-3.0 + commercial) to fit the
+  self-hosted, permissively-licensed Discord-bot ecosystem.
+- **Established-by-volume now requires activity across distinct days**
+  (`Account.active_days` ≥ `volume_min_active_days`, default 3). A burner account
+  that dumps messages in one or two sittings to bank trust no longer earns the
+  volume shortcut. Adapters that don't supply `active_days` simply forgo the
+  shortcut (the safe default).
+- Honest reframing of the "no dependencies" value proposition (it is about
+  deterministic offline testing, log replay, and chat-library portability — not a
+  purity badge).
+
+### Added
+- **`Policy(quarantine_unattended_holds=True)`** — for thin moderation, converts a
+  lone-key `HOLD` into a reversible `QUARANTINE` so flagged content does not sit
+  in a queue nobody works (an opt-in widening of the action surface).
+- **Review-queue telemetry**: `ReadinessReport.would_review` / `review_rate`
+  (also in the `goodfaith replay` report) warn when the HOLD/QUARANTINE queue
+  would outgrow available moderators.
+- `.github/FUNDING.yml` so the repository's Sponsor button works once GitHub
+  Sponsors enrollment is complete.
+
+[Unreleased]: https://github.com/ArisRhiannon/goodfaith/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ArisRhiannon/goodfaith/compare/v0.2.0...v0.3.0
 
 ## [0.2.0] - 2026-05-31
 

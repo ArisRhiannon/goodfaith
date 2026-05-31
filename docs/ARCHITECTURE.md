@@ -14,7 +14,7 @@ and safe to trust.
 | `policy.py` | `Policy` — the per-guild tunable surface (mode, thresholds, allowlists). Immutable. |
 | `text.py` | Normalization + configurable-width SimHash (**128-bit default**) and Hamming distance for near-duplicate detection. |
 | `behavior.py` | The legitimate-behavior allowlist. Decides which frequency/repetition signals to **suppress**. The agreement lexicon is a replaceable, locale-specific default; short-message gating is the language-agnostic shield. |
-| `reputation.py` | Trust tiers (`trusted`/`established`/`regular`/`newcomer`) and the trust invariants. Tier resists dormancy; the *engine* suspends immunity on anomaly. |
+| `reputation.py` | Trust tiers (`trusted`/`established`/`regular`/`newcomer`) and the trust invariants. Tier resists dormancy; the *engine* suspends immunity on anomaly. Established-by-volume also requires activity across distinct days (`active_days`) so trust can't be farmed in a burst. |
 | `signals.py` | The danger detectors, including the cross-user **burst** detector. Tags each signal with a `Tier` and a detector `family`. |
 | `windows.py` | Bounded sliding-window state for cross-user near-dup, per-user frequency, and per-family burst. |
 | `engine.py` | Orchestration: trust gating (with anomaly-based suspension), corroboration across independent families, the action ladder, rollout telemetry, the auditable vouch ledger, and the curated banks. |
@@ -54,6 +54,12 @@ accounts trip the same dangerous-content signal in a short window.
 The crucial property: **punitive action requires both a non-trusted author and
 corroboration from independent families.** Trust removes the punitive option but
 not scrutiny — corroborated danger from a trusted account is still held for review.
+
+On large, understaffed servers the lone-key `HOLD` can pile up unworked.
+`ReadinessReport.review_rate` surfaces how fast that queue would grow, and
+`Policy(quarantine_unattended_holds=True)` converts those holds into reversible
+quarantines so flagged content does not simply sit. This widens the action
+surface deliberately — it is an opt-in trade for thin moderation.
 
 ## Why these signals are "high precision"
 

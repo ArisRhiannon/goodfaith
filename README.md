@@ -17,10 +17,13 @@ classifier can promise, and the flip side of this design is that it will
 knowingly let some spam through (a higher false-negative rate) to protect your
 regulars. See the [threat model & non-goals](#threat-model--non-goals).
 
-The engine is **pure Python, has no runtime dependencies, holds no discord.py
-dependency, and stores no personal data** — only opaque integer IDs and SimHash
-fingerprints. Drop it into any bot through a thin adapter (see
-[`examples/discord_adapter.py`](examples/discord_adapter.py)).
+The decision engine is decoupled from discord.py (the integration lives in a thin
+adapter, e.g. [`examples/discord_adapter.py`](examples/discord_adapter.py)). That
+separation is the point, not a dependency-count badge: it lets the engine be
+unit-tested deterministically without a live bot, replayed over exported logs,
+and reused with any chat library. The core happens to need no third-party runtime
+packages, and it stores no personal data — only opaque integer IDs and SimHash
+fingerprints.
 
 > It is a clean-room, standalone rework of the private automod that runs on a
 > real ~1,200-member community. See **[field validation](docs/METHODOLOGY.md)**
@@ -188,6 +191,12 @@ goodfaith is tuned to avoid it.
 
 If you run a large or high-threat server, treat goodfaith as one precision-first
 layer in a defense-in-depth setup, run it in shadow first, and tune aggressively.
+Concrete levers for that case: watch `readiness().review_rate` to see whether the
+HOLD/QUARANTINE queue would outgrow your mods; set
+`Policy(quarantine_unattended_holds=True)` so flagged content is reversibly
+quarantined instead of sitting in an unworked queue; and supply `active_days` so
+the established-by-volume shortcut resists accounts farmed in a burst to bank
+trust before turning.
 
 ## Privacy
 
@@ -215,11 +224,12 @@ pytest -q
 See [CONTRIBUTING.md](CONTRIBUTING.md). Please run `ruff check .` and `pytest`
 before submitting, and add an entry to `CHANGELOG.md` under **Unreleased**.
 
-## Support
+## Funding
 
-No pressure — a star or a thoughtful issue means a lot. If goodfaith saved your
-moderators from an awkward apology, an optional tip is welcome at
-`0x4705fA2de020E2D7F7FE08f5dD4585710897f3E1` (ETH / any EVM chain).
+If goodfaith saves your moderators an awkward apology, support is welcome through
+the repository's **Sponsor** button (GitHub Sponsors). A one-off crypto tip is an
+alternative, not the headline: `0x4705fA2de020E2D7F7FE08f5dD4585710897f3E1`
+(ETH / any EVM chain). Stars and well-scoped issues help just as much.
 
 ## License
 

@@ -1,0 +1,6 @@
+# Drives the repository's "Sponsor" button.
+# NOTE: the GitHub Sponsors entry only renders once the ArisRhiannon account has
+# finished Sponsors enrollment (identity, payout/Stripe, and tax forms) at
+# https://github.com/sponsors — that step is manual and cannot be automated.
+github: [ArisRhiannon]
+custom: ["https://etherscan.io/address/0x4705fA2de020E2D7F7FE08f5dD4585710897f3E1"]
