@@ -4,7 +4,7 @@ import pytest
 
 from goodfaith import Action, Engine, Mode, Policy
 from goodfaith.extract import classify
-from goodfaith.text import hamming, simhash
+from goodfaith.text import MAX_CONTENT, hamming, normalize, simhash
 
 _GOOD = "hey friends here is the cool community resource i mentioned earlier today"
 _BAD = "free discord nitro giveaway click the link right now everyone join"
@@ -158,3 +158,34 @@ def test_repeating_one_family_does_not_self_escalate(mk):
         worst = max(worst, eng.evaluate(mk(7, "join discord.gg/x", external_invite=True,
                                             invite_urls=("discord.gg/x",), message_id=i)).action)
     assert worst == Action.QUARANTINE             # one family, however many times
+
+
+# ── rainbow-teaming v0.5.2: obfuscation, diacritics, ping-raid, DoS cap ───────
+
+def test_obfuscated_invite_is_treated_as_an_invite():
+    assert classify("join discord dot gg/abc").external_invite is True
+    assert classify("join discord.gg/abc").external_invite is True
+
+
+def test_diacritic_obfuscation_is_folded():
+    bad = "free discord nitro giveaway click the link right now everyone join"
+    obf = bad.replace("free", "fr\u0301e\u0301e\u0301")  # combining acute accents
+    assert hamming(simhash(bad), simhash(obf)) <= 12
+
+
+def test_ping_raid_without_everyone_is_caught(mk):
+    eng = Engine(Policy(mode=Mode.ENFORCE))
+    d = eng.evaluate(mk(9, "hi", mention_count=12, unsafe_links=("http://x.tld",),
+                        account_age_days=0.1))
+    assert any(k.family == "raid" for k in d.keys)
+
+
+def test_a_few_pings_is_not_a_raid(mk):
+    eng = Engine(Policy(mode=Mode.ENFORCE))
+    d = eng.evaluate(mk(9, "hey friends", mention_count=3, unsafe_links=("http://x.tld",),
+                        account_age_days=0.1))
+    assert all(k.family != "raid" for k in d.keys)  # below threshold -> no false raid
+
+
+def test_oversized_content_is_capped():
+    assert len(normalize("a" * (MAX_CONTENT * 3))) <= MAX_CONTENT
