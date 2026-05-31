@@ -24,6 +24,8 @@ class WindowState:
         self._freq: dict[tuple[int, int], collections.deque[float]] = {}
         # guild_id -> deque[(ts, family, user_id)]  (cross-user, per-signal-family)
         self._burst: dict[int, collections.deque[tuple[float, str, int]]] = {}
+        # (guild_id, user_id) -> deque[(ts, family)]  (one user's high-precision families)
+        self._userfam: dict[tuple[int, int], collections.deque[tuple[float, str]]] = {}
 
     def record_and_count_neardup(
         self, guild_id: int, user_id: int, fingerprint: int, now: float, policy: Policy
@@ -84,6 +86,22 @@ class WindowState:
         dq.append((now, family, user_id))
         return len(distinct)
 
+    def record_and_count_user_families(
+        self, guild_id: int, user_id: int, families: set[str], now: float, policy: Policy
+    ) -> int:
+        """Record the high-precision families THIS user tripped now, and return how
+        many DISTINCT such families they tripped within the burst window — so a
+        single user splitting independent signals across messages self-corroborates."""
+        dq = self._userfam.setdefault((guild_id, user_id), collections.deque())
+        cutoff = now - policy.burst_window_seconds
+        while dq and dq[0][0] < cutoff:
+            dq.popleft()
+        while len(dq) >= policy.burst_index_max:
+            dq.popleft()
+        for fam in families:
+            dq.append((now, fam))
+        return len({fam for ts, fam in dq if ts >= cutoff})
+
     def prune(self, now: float, policy: Policy) -> None:
         cutoff = now - policy.neardup_window_seconds
         for gid in list(self._neardup):
@@ -106,3 +124,9 @@ class WindowState:
                 dq.popleft()
             if not dq:
                 del self._burst[gid]
+        for key in list(self._userfam):
+            dq = self._userfam[key]
+            while dq and dq[0][0] < bcut:
+                dq.popleft()
+            if not dq:
+                del self._userfam[key]

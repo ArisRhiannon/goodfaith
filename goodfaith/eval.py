@@ -168,6 +168,12 @@ def corpus() -> list[Scenario]:
                        ev=True, inv=("discord.gg/x",))],
                  known_bad=(_BAD,),
                  note="2-week burner, lots of msgs but active 1 day -> denied trust shortcut"),
+        Scenario("split_signal_same_user", "abuse",
+                 [_msg(145, "come hang out discord.gg/x", mid=145, ev=True, inv=("discord.gg/x",)),
+                  _msg(145, _BAD, mid=146)],
+                 known_bad=(_BAD,),
+                 note="one user splits an invite and a known-bad hit across two messages "
+                      "in the window -> self-corroborated, escalates beyond a lone QUARANTINE"),
 
         # ── evasion: accepted misses, reported so the holes are visible ──
         Scenario("fully_trusted_first_invite", "evasion",

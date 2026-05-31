@@ -343,6 +343,7 @@ class Engine:
         # a legitimate copypasta/quote-chain among regulars is never escalated
         # here. Only untrusted authors feed/trigger the burst, so a lone regular
         # sharing one invite is never escalated this way either.
+        corroborated = False
         if keys and not trusted:
             burst = max(
                 (self.windows.record_and_count_family_burst(
@@ -354,13 +355,26 @@ class Engine:
             if bsig is not None:
                 raw.append(bsig)
                 keys = signals.keys(raw)
+            # Self-corroboration: the SAME user tripping independent high-precision
+            # families across a short window is as damning as doing so in one
+            # message — closes the "split your signals across messages" gap without
+            # a new signal type (neardup is excluded, so copypasta is never caught).
+            user_families = {k.family for k in keys} & _BURST_FAMILIES
+            if user_families:
+                distinct = self.windows.record_and_count_user_families(
+                    msg.guild_id, acc.user_id, user_families, now, policy)
+                corroborated = distinct >= policy.keys_for_punitive
 
         reasons = [f"{s.name}:{s.detail}" for s in raw]
-        decision = self._decide(acc, policy, keys, raw, reasons, allow_patterns, trusted)
+        if corroborated and len({k.family for k in keys}) < policy.keys_for_punitive:
+            reasons.append("self_corroborated:independent families across recent messages")
+        decision = self._decide(acc, policy, keys, raw, reasons, allow_patterns,
+                                trusted, corroborated)
         return self._finish(msg, policy, decision)
 
     def _decide(
-        self, acc: Account, policy: Policy, keys, raw, reasons, allow_patterns, trusted
+        self, acc: Account, policy: Policy, keys, raw, reasons, allow_patterns, trusted,
+        corroborated: bool = False,
     ) -> Decision:
         families = {k.family for k in keys}
         known_bad = any(k.family == "known_bad" for k in keys)
@@ -383,7 +397,9 @@ class Engine:
             return Decision(action, 0.4, keys=keys, reasons=reasons, allowlisted=allow_patterns)
 
         # Non-trusted + corroboration from independent families → punitive (reversible).
-        if len(families) >= policy.keys_for_punitive:
+        # Corroboration may come from one message OR the same user splitting independent
+        # high-precision families across a short window (self-corroboration).
+        if len(families) >= policy.keys_for_punitive or corroborated:
             return Decision(Action.PUNITIVE, 0.9, keys=keys, reasons=reasons,
                             allowlisted=allow_patterns, reversible=True)
 

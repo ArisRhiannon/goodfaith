@@ -129,3 +129,32 @@ def test_future_timestamps_do_not_escape_burst(mk):
         for i in range(6)
     ]
     assert Action.PUNITIVE in actions
+
+
+# ── FN reduction: same user splitting independent families self-corroborates ───
+
+def test_split_signal_same_user_escalates(mk):
+    eng = Engine(Policy(mode=Mode.ENFORCE))
+    eng.add_known_bad(1, _BAD)
+    q = eng.evaluate(mk(5, "come hang out discord.gg/x", external_invite=True,
+                        invite_urls=("discord.gg/x",), message_id=1))
+    assert q.action == Action.QUARANTINE          # lone signal: contained, not punished
+    p = eng.evaluate(mk(5, _BAD, message_id=2))    # second, independent family
+    assert p.action == Action.PUNITIVE
+
+
+def test_benign_followup_after_a_flag_is_not_punished(mk):
+    eng = Engine(Policy(mode=Mode.ENFORCE))
+    eng.evaluate(mk(6, "come hang out discord.gg/x", external_invite=True,
+                    invite_urls=("discord.gg/x",), message_id=1))
+    d = eng.evaluate(mk(6, "anyway how is everyone doing today", message_id=2))
+    assert d.action == Action.ALLOW               # no second family -> no escalation
+
+
+def test_repeating_one_family_does_not_self_escalate(mk):
+    eng = Engine(Policy(mode=Mode.ENFORCE))
+    worst = Action.ALLOW
+    for i in range(4):  # same user, same family (invite) repeated
+        worst = max(worst, eng.evaluate(mk(7, "join discord.gg/x", external_invite=True,
+                                            invite_urls=("discord.gg/x",), message_id=i)).action)
+    assert worst == Action.QUARANTINE             # one family, however many times
