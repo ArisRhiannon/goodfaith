@@ -70,6 +70,7 @@ class Account:
     account_age_days: float = 999.0   # age of the Discord account
     server_age_days: float = 999.0    # tenure in this guild
     msg_count: int = 0                # historical messages in this guild
+    active_days: int = 0              # distinct days the member has posted (anti-farm)
     has_avatar: bool = True
     is_staff: bool = False            # mod/admin/owner → fully immune
     reputation_override: str | None = None  # force a tier (tests/config/vouch)

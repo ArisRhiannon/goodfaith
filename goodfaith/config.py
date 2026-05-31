@@ -38,6 +38,11 @@ REGULAR_MIN_MSGS = _int("GF_REGULAR_MSGS", 5)
 # patient spammer who opens an account and posts 100 times immediately.
 ESTABLISHED_VOLUME_MSGS = _int("GF_ESTAB_VOLUME_MSGS", 100)
 
+# ...and require activity spread across several DISTINCT days, so a burner farmed
+# by dumping messages in one or two sittings cannot buy the volume shortcut.
+# Adapters that don't supply ``active_days`` simply forgo this shortcut (safer).
+VOLUME_MIN_ACTIVE_DAYS = _int("GF_VOLUME_MIN_ACTIVE_DAYS", 3)
+
 # A "new" account is a RISK signal (raises scrutiny), never a punishment by itself.
 NEW_ACCOUNT_DAYS = _float("GF_NEW_ACCOUNT_DAYS", 7.0)
 

@@ -30,9 +30,15 @@ class Policy:
     established_min_server_days: float = config.ESTABLISHED_MIN_SERVER_DAYS
     established_min_msgs: int = config.ESTABLISHED_MIN_MSGS
     established_volume_msgs: int = config.ESTABLISHED_VOLUME_MSGS
+    volume_min_active_days: int = config.VOLUME_MIN_ACTIVE_DAYS
     regular_min_server_days: float = config.REGULAR_MIN_SERVER_DAYS
     regular_min_msgs: int = config.REGULAR_MIN_MSGS
     new_account_days: float = config.NEW_ACCOUNT_DAYS
+
+    # Understaffed servers: convert a lone-key HOLD into a reversible QUARANTINE
+    # so flagged content does not sit unattended in a queue nobody works. Off by
+    # default (it widens the action surface; the trade is yours to make).
+    quarantine_unattended_holds: bool = False
 
     # Near-duplicate coordination
     simhash_bits: int = config.SIMHASH_BITS

@@ -37,9 +37,12 @@ def tier(acc: Account, policy: Policy) -> str:
         return ESTABLISHED
     # Established-by-volume: lots of history + a non-new account ⇒ a real member,
     # even if their join date isn't recorded. Requiring a non-new account blocks
-    # the patient spammer who opens an account and floods immediately.
+    # the patient spammer who opens an account and floods immediately; requiring
+    # activity across several DISTINCT days blocks the burner farmed by dumping
+    # messages in one or two sittings to bank trust before attacking.
     if (acc.msg_count >= policy.established_volume_msgs
-            and acc.account_age_days >= policy.new_account_days):
+            and acc.account_age_days >= policy.new_account_days
+            and acc.active_days >= policy.volume_min_active_days):
         return ESTABLISHED
     if (acc.server_age_days >= policy.regular_min_server_days
             and acc.msg_count >= policy.regular_min_msgs):
