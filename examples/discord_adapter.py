@@ -11,24 +11,18 @@ It starts every guild in SHADOW mode. Flip a guild to CANARY/ENFORCE only after
 from __future__ import annotations
 
 import datetime
-import re
 import time
-from urllib.parse import urlparse
 
 import discord
 from discord.ext import commands
 
 from goodfaith import Account, Action, Engine, Message, Mode, Policy
+from goodfaith.extract import classify
 
-_URL = re.compile(r"https?://\S+", re.IGNORECASE)
-_INVITE = re.compile(
-    r"(?:discord\.(?:gg|com/invite)|discordapp\.com/invite|dsc\.gg|discord\.me)/\S+",
-    re.IGNORECASE,
-)
 _DISCORD_EPOCH_MS = 1420070400000
 
 # Replace with your own allowlist of domains you consider safe.
-SAFE_HOSTS = {"discord.com", "tenor.com", "giphy.com", "youtube.com", "youtu.be"}
+SAFE_HOSTS = ("discord.com", "tenor.com", "giphy.com", "youtube.com", "youtu.be")
 
 
 def _account_age_days(user_id: int) -> float:
@@ -65,14 +59,10 @@ class GoodFaith(commands.Cog):
         member = message.author
         content = message.content or ""
 
-        invites = _INVITE.findall(content)
-        unsafe = []
-        for url in _URL.findall(content):
-            if _INVITE.search(url):
-                continue
-            host = (urlparse(url).hostname or "").lower().removeprefix("www.")
-            if host and host not in SAFE_HOSTS:
-                unsafe.append(url)
+        # Tested classification (no more hand-rolled regex). Pass your guild's own
+        # invite code(s) so your OWN server's invite is not flagged as external.
+        links = classify(content, own_invite_codes=self._own_invites(message.guild),
+                         safe_hosts=SAFE_HOSTS)
 
         server_age = 999.0
         if getattr(member, "joined_at", None):
@@ -104,11 +94,17 @@ class GoodFaith(commands.Cog):
             mentions_everyone=message.mention_everyone,
             has_attachments=bool(message.attachments),
             sticker_count=len(message.stickers or []),
-            invite_urls=tuple(invites),
-            external_invite=bool(invites),  # refine: only True for OTHER guilds
-            unsafe_links=tuple(unsafe),
+            invite_urls=links.invite_urls,
+            external_invite=links.external_invite,  # correct: only OTHER guilds
+            unsafe_links=links.unsafe_links,
             is_reply=message.reference is not None,
         )
+
+    def _own_invites(self, guild) -> tuple[str, ...]:
+        # Return this guild's own invite code(s) (e.g. its vanity_url_code) so they
+        # are never treated as external. Empty tuple = treat every invite as external.
+        code = getattr(guild, "vanity_url_code", None)
+        return (code,) if code else ()
 
     def _message_count(self, guild_id: int, user_id: int) -> int:
         # Plug in your own per-guild message counter — the core trust signal.
