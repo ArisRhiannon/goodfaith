@@ -26,9 +26,9 @@ _ZERO_WIDTH = re.compile(
     r"[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff\u00ad"
     r"\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069]"
 )
-# Common Cyrillic/Greek look-alikes → ASCII. Applied ONLY to tokens that already
-# mix Latin with one of these (the homoglyph-evasion signature). Pure non-Latin
-# words (legit Russian/Greek) and accented Latin (café, basé) are left untouched.
+# Cyrillic/Greek look-alikes → ASCII (NFKD does not fold these). Applied only to
+# tokens that mix Latin with one of them — the homoglyph-evasion signature — so a
+# pure non-Latin word (legit Russian/Greek) is left intact.
 _CONF_MAP = {
     "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "к": "k",
     "м": "m", "т": "t", "в": "b", "н": "h", "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d",
@@ -39,6 +39,7 @@ _CONF_CHARS = frozenset(_CONF_MAP)
 _HAS_LATIN = re.compile(r"[a-z]")
 
 DEFAULT_BITS = 128
+MAX_CONTENT = 10_000  # hard cap before tokenizing — bounds CPU on pathological input
 
 
 def _defuse(tok: str) -> str:
@@ -48,9 +49,15 @@ def _defuse(tok: str) -> str:
 
 
 def normalize(text: str) -> str:
-    """Strip zero-width chars, NFKC-normalize, lowercase (defeats obfuscation)."""
-    text = _ZERO_WIDTH.sub("", text or "")
-    text = unicodedata.normalize("NFKC", text)
+    """Strip zero-width chars, fold diacritics, lowercase (defeats obfuscation).
+
+    Decomposing (NFKD) and dropping combining marks folds diacritic tricks like
+    ``fŕéé`` and makes matching accent-insensitive (two spellings of the same word
+    match). Input is length-capped first so a giant message can't burn CPU.
+    """
+    text = _ZERO_WIDTH.sub("", (text or "")[:MAX_CONTENT])
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
     return text.lower().strip()
 
 
