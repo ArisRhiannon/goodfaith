@@ -1,6 +1,6 @@
 """Danger-signal detectors. Only high-precision ones are "keys".
 
-Zero-FP design: a generic non-allowlisted link is NOT a key (real users post
+Precision-first: a generic non-allowlisted link is NOT a key (real users post
 links constantly). Only these are HIGH keys, each in its own detector *family*
 so the engine can demand corroboration from independent sources:
 
@@ -34,10 +34,11 @@ def detect_unsafe_link(msg: Message) -> Signal | None:
 
 def detect_mass_mention_raid(msg: Message, acc: Account, policy: Policy) -> Signal | None:
     new = acc.account_age_days < policy.new_account_days
-    if msg.mentions_everyone and (msg.unsafe_links or msg.external_invite) and new:
+    mass = msg.mentions_everyone or msg.mention_count >= policy.mass_mention_min
+    if mass and (msg.unsafe_links or msg.external_invite) and new:
         return Signal(
             "mass_mention_raid", Tier.HIGH, "raid",
-            "@everyone/@here + link/invite from a new account",
+            "mass mention + link/invite from a new account",
         )
     return None
 

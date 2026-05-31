@@ -86,6 +86,10 @@ KNOWN_GOOD_MAX = _int("GF_KNOWN_GOOD_MAX", 10_000)
 EMPHASIS_MAX_TOKEN_LEN = _int("GF_EMPHASIS_TOKEN_LEN", 6)
 SHORT_MESSAGE_TOKENS = _int("GF_SHORT_TOKENS", 4)
 
+# A new account pinging this many distinct users (even without @everyone) plus a
+# link/invite is a mass-mention raid. High enough that normal tagging is unaffected.
+MASS_MENTION_MIN = _int("GF_MASS_MENTION_MIN", 10)
+
 # Cross-user agreement pile-ons ("same", "this", "W", "fr"…) — the #1 near-dup
 # false-positive trap. Many distinct users posting the same short word of
 # agreement is community behavior, not coordinated spam.

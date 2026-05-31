@@ -65,6 +65,7 @@ class Policy:
     # Behavior allowlist
     emphasis_max_token_len: int = config.EMPHASIS_MAX_TOKEN_LEN
     short_message_tokens: int = config.SHORT_MESSAGE_TOKENS
+    mass_mention_min: int = config.MASS_MENTION_MIN
     # English-internet default; REPLACE wholesale per locale (e.g. frozenset() to
     # rely purely on the language-agnostic structural gates), or extend below.
     agreement_words: frozenset[str] = config.AGREEMENT_WORDS
@@ -84,6 +85,8 @@ class Policy:
             raise ValueError("keys_for_punitive must be >= 1")
         if self.known_bad_max < 1 or self.known_good_max < 1:
             raise ValueError("known_bad_max/known_good_max must be >= 1")
+        if self.mass_mention_min < 1:
+            raise ValueError("mass_mention_min must be >= 1")
 
     def all_agreement_words(self) -> frozenset[str]:
         return self.agreement_words | self.extra_agreement_words
