@@ -77,6 +77,11 @@ KEYS_FOR_PUNITIVE = _int("GF_KEYS_PUNITIVE", 2)
 # a member's earned trust never does (a returning regular is still a regular).
 KNOWN_BAD_TTL_SECONDS = _int("GF_KNOWN_BAD_TTL", 90 * 86400)
 
+# Hard FIFO caps on the curated banks — bound memory AND the per-message O(N)
+# scan even if an operator keeps adding entries (or a buggy caller floods them).
+KNOWN_BAD_MAX = _int("GF_KNOWN_BAD_MAX", 10_000)
+KNOWN_GOOD_MAX = _int("GF_KNOWN_GOOD_MAX", 10_000)
+
 # ── Behavior allowlist tuning ─────────────────────────────────────────────────
 EMPHASIS_MAX_TOKEN_LEN = _int("GF_EMPHASIS_TOKEN_LEN", 6)
 SHORT_MESSAGE_TOKENS = _int("GF_SHORT_TOKENS", 4)

@@ -59,6 +59,8 @@ class Policy:
 
     # Known-bad bank decay
     known_bad_ttl_seconds: int = config.KNOWN_BAD_TTL_SECONDS
+    known_bad_max: int = config.KNOWN_BAD_MAX
+    known_good_max: int = config.KNOWN_GOOD_MAX
 
     # Behavior allowlist
     emphasis_max_token_len: int = config.EMPHASIS_MAX_TOKEN_LEN
@@ -70,6 +72,18 @@ class Policy:
 
     # Channels never moderated (announcements, memes, bot-spam, etc.)
     channel_allowlist: frozenset[int] = frozenset()
+
+    def __post_init__(self) -> None:
+        # Fail loud on misconfiguration (e.g. a bad GF_* env) instead of silently
+        # disabling detection. blake2b's digest_size caps usable width at 512 bits.
+        if not 8 <= self.simhash_bits <= 512:
+            raise ValueError("simhash_bits must be in [8, 512]")
+        if not 0 <= self.simhash_max_hamming <= self.simhash_bits:
+            raise ValueError("simhash_max_hamming must be in [0, simhash_bits]")
+        if self.keys_for_punitive < 1:
+            raise ValueError("keys_for_punitive must be >= 1")
+        if self.known_bad_max < 1 or self.known_good_max < 1:
+            raise ValueError("known_bad_max/known_good_max must be >= 1")
 
     def all_agreement_words(self) -> frozenset[str]:
         return self.agreement_words | self.extra_agreement_words
