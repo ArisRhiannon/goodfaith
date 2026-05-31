@@ -34,9 +34,10 @@ def detect_unsafe_link(msg: Message) -> Signal | None:
 
 def detect_mass_mention_raid(msg: Message, acc: Account, policy: Policy) -> Signal | None:
     new = acc.account_age_days < policy.new_account_days
-    if msg.mentions_everyone and msg.unsafe_links and new:
+    if msg.mentions_everyone and (msg.unsafe_links or msg.external_invite) and new:
         return Signal(
-            "mass_mention_raid", Tier.HIGH, "raid", "@everyone/@here + link from a new account"
+            "mass_mention_raid", Tier.HIGH, "raid",
+            "@everyone/@here + link/invite from a new account",
         )
     return None
 
