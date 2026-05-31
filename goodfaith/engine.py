@@ -46,6 +46,19 @@ from .windows import WindowState
 # often legitimate copypasta, and is already its own (review-only) signal.
 _BURST_FAMILIES = frozenset({"invite", "known_bad", "raid"})
 
+# A false-positive correction only un-flags the SIMILARITY-derived families a
+# benign message can trip by collision. It must NOT whitelist an attacker's live
+# invite/raid/link (those are facts, not detection mistakes — and the SimHash
+# fingerprint ignores URLs, so a text match would otherwise smuggle them through).
+_KNOWN_GOOD_SUPPRESSES = frozenset({"neardup", "known_bad"})
+
+# GC the sliding-window key space periodically (deques self-bound by time/size,
+# but their dict keys are only reclaimed by prune()).
+_PRUNE_INTERVAL = 1024
+
+# created_at beyond this far into the future is not trusted (clock skew / spoof).
+_CLOCK_SKEW_SECONDS = 60.0
+
 
 @dataclass
 class ReadinessReport:
@@ -102,6 +115,7 @@ class Engine:
         # guild -> {user_id -> {"actor_id", "reason", "ts"}}  (auditable)
         self._vouched: dict[int, dict[int, dict]] = {}
         self._stats: dict[int, _Stats] = {}
+        self._calls = 0
 
     # ── Configuration ────────────────────────────────────────────────────
     def set_policy(self, guild_id: int, policy: Policy) -> None:
@@ -139,23 +153,40 @@ class Engine:
 
     # ── Curated banks ────────────────────────────────────────────────────
     def add_known_bad(self, guild_id: int, text: str, now: float | None = None) -> bool:
-        """Add a curated bad fingerprint (mod-reviewed). Entries decay (TTL)."""
-        fp = simhash(text, self.policy_for(guild_id).simhash_bits)
+        """Add a curated bad fingerprint (mod-reviewed). Entries decay (TTL).
+
+        Rejects non-substantial text: a low-entropy fingerprint would collide
+        broadly and cause false positives — the opposite of this project's goal.
+        """
+        policy = self.policy_for(guild_id)
+        if not behavior.is_substantial(text, policy):
+            return False
+        fp = simhash(text, policy.simhash_bits)
         if not fp:
             return False
-        self._bad.setdefault(guild_id, []).append((now if now is not None else time.time(), fp))
+        bank = self._bad.setdefault(guild_id, [])
+        bank.append((now if now is not None else time.time(), fp))
+        del bank[: max(0, len(bank) - policy.known_bad_max)]  # FIFO cap
         return True
 
     def mark_false_positive(self, guild_id: int, text: str) -> bool:
         """Record content the engine wrongly flagged so it can NEVER reoccur.
 
-        The fingerprint is added to a per-guild known-good bank that forces ALLOW
-        — closing the loop so a corrected false positive never repeats.
+        The fingerprint is added to a per-guild known-good bank that suppresses
+        the similarity-derived signals (near-dup / known-bad) on matching content
+        — closing the loop so a corrected false positive never repeats. It does
+        NOT whitelist a live invite/raid/link. Requires substantial content (a
+        short, low-entropy entry would over-suppress real detections).
         """
-        fp = simhash(text, self.policy_for(guild_id).simhash_bits)
+        policy = self.policy_for(guild_id)
+        if not behavior.is_substantial(text, policy):
+            return False
+        fp = simhash(text, policy.simhash_bits)
         if not fp:
             return False
-        self._good.setdefault(guild_id, []).append(fp)
+        bank = self._good.setdefault(guild_id, [])
+        bank.append(fp)
+        del bank[: max(0, len(bank) - policy.known_good_max)]  # FIFO cap
         return True
 
     def _matches_known_bad(self, guild_id: int, fp: int, policy: Policy, now: float) -> bool:
@@ -189,13 +220,57 @@ class Engine:
         }
 
     def load_state(self, state: dict) -> None:
-        """Restore a snapshot produced by export_state()."""
-        for g, users in state.get("vouched", {}).items():
-            self._vouched[int(g)] = {int(u): v for u, v in users.items()}
-        for g, entries in state.get("known_bad", {}).items():
-            self._bad[int(g)] = [(float(ts), int(fp)) for ts, fp in entries]
-        for g, fps in state.get("known_good", {}).items():
-            self._good[int(g)] = [int(x) for x in fps]
+        """Restore a snapshot from export_state(), defensively.
+
+        State may be read from disk/DB where it can be corrupted or tampered, so
+        malformed entries are skipped (never raised on) and banks are size-capped.
+        """
+        if not isinstance(state, dict):
+            return
+        p = self.default_policy
+
+        def _as_int(x):
+            try:
+                return int(x)
+            except (TypeError, ValueError):
+                return None
+
+        vouched = state.get("vouched")
+        if isinstance(vouched, dict):
+            for g, users in vouched.items():
+                gid = _as_int(g)
+                if gid is None or not isinstance(users, dict):
+                    continue
+                clean = {uid: meta for u, meta in users.items()
+                         if (uid := _as_int(u)) is not None and isinstance(meta, dict)}
+                if clean:
+                    self._vouched[gid] = clean
+
+        known_bad = state.get("known_bad")
+        if isinstance(known_bad, dict):
+            for g, entries in known_bad.items():
+                gid = _as_int(g)
+                if gid is None or not isinstance(entries, list):
+                    continue
+                clean_b: list[tuple[float, int]] = []
+                for e in entries:
+                    if isinstance(e, (list, tuple)) and len(e) == 2 and _as_int(e[1]) is not None:
+                        try:
+                            clean_b.append((float(e[0]), int(e[1])))
+                        except (TypeError, ValueError):
+                            pass
+                if clean_b:
+                    self._bad[gid] = clean_b[-p.known_bad_max:]
+
+        known_good = state.get("known_good")
+        if isinstance(known_good, dict):
+            for g, fps in known_good.items():
+                gid = _as_int(g)
+                if gid is None or not isinstance(fps, list):
+                    continue
+                clean_g = [v for f in fps if (v := _as_int(f)) is not None]
+                if clean_g:
+                    self._good[gid] = clean_g[-p.known_good_max:]
 
     # ── Telemetry ────────────────────────────────────────────────────────
     def readiness(self, guild_id: int) -> ReadinessReport:
@@ -218,6 +293,11 @@ class Engine:
         policy = self.policy_for(msg.guild_id)
         acc = msg.author
         now = msg.created_at or time.time()
+        if now > time.time() + _CLOCK_SKEW_SECONDS:  # don't trust future timestamps
+            now = time.time()
+        self._calls += 1
+        if self._calls % _PRUNE_INTERVAL == 0:  # reclaim idle window keys
+            self.windows.prune(now, policy)
 
         if msg.channel_id in policy.channel_allowlist:
             return self._allow(msg, policy, "channel_allowlisted")
@@ -226,9 +306,7 @@ class Engine:
             return self._allow(msg, policy, "staff_immune")
 
         fp = simhash(msg.content, policy.simhash_bits)
-        if self._matches_known_good(msg.guild_id, fp, policy):
-            return self._finish(msg, policy, Decision(
-                Action.ALLOW, 0.0, reasons=["known_good"], allowlisted=["false_positive_feedback"]))
+        known_good = self._matches_known_good(msg.guild_id, fp, policy)
 
         allow_patterns = behavior.legitimate_patterns(msg, policy)
         substantial = behavior.is_substantial(msg.content, policy)
@@ -250,6 +328,10 @@ class Engine:
         ):
             if s is not None:
                 raw.append(s)
+
+        if known_good:  # FP correction: drop only similarity-derived signals
+            raw = [s for s in raw if s.family not in _KNOWN_GOOD_SUPPRESSES]
+            allow_patterns = [*allow_patterns, "false_positive_feedback"]
 
         keys = signals.keys(raw)
         trusted = reputation.is_trusted(acc, policy) or self.is_vouched(msg.guild_id, acc.user_id)
