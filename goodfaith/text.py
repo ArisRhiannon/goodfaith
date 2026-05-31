@@ -26,8 +26,25 @@ _ZERO_WIDTH = re.compile(
     r"[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff\u00ad"
     r"\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069]"
 )
+# Common Cyrillic/Greek look-alikes → ASCII. Applied ONLY to tokens that already
+# mix Latin with one of these (the homoglyph-evasion signature). Pure non-Latin
+# words (legit Russian/Greek) and accented Latin (café, basé) are left untouched.
+_CONF_MAP = {
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "к": "k",
+    "м": "m", "т": "t", "в": "b", "н": "h", "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d",
+    "ο": "o", "ε": "e", "α": "a", "ρ": "p", "ν": "v", "τ": "t", "υ": "u", "κ": "k", "ι": "i",
+}
+_CONFUSABLES = str.maketrans(_CONF_MAP)
+_CONF_CHARS = frozenset(_CONF_MAP)
+_HAS_LATIN = re.compile(r"[a-z]")
 
 DEFAULT_BITS = 128
+
+
+def _defuse(tok: str) -> str:
+    if _HAS_LATIN.search(tok) and any(c in _CONF_CHARS for c in tok):
+        return tok.translate(_CONFUSABLES)
+    return tok
 
 
 def normalize(text: str) -> str:
@@ -45,7 +62,7 @@ def tokens(text: str) -> list[str]:
     spam is still caught; sharing the same link is not.
     """
     text = _URL_RE.sub(" ", text or "")
-    return _TOKEN_RE.findall(normalize(text))
+    return [_defuse(t) for t in _TOKEN_RE.findall(normalize(text))]
 
 
 def _hash(token: str, nbytes: int) -> int:
