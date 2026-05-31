@@ -17,8 +17,10 @@ and safe to trust.
 | `reputation.py` | Trust tiers (`trusted`/`established`/`regular`/`newcomer`) and the trust invariants. Tier resists dormancy; the *engine* suspends immunity on anomaly. Established-by-volume also requires activity across distinct days (`active_days`) so trust can't be farmed in a burst. |
 | `signals.py` | The danger detectors, including the cross-user **burst** detector. Tags each signal with a `Tier` and a detector `family`. |
 | `windows.py` | Bounded sliding-window state for cross-user near-dup, per-user frequency, and per-family burst. |
-| `engine.py` | Orchestration: trust gating (with anomaly-based suspension), corroboration across independent families, the action ladder, rollout telemetry, the auditable vouch ledger, and the curated banks. |
-| `cli.py` | `goodfaith replay` — shadow-replay a JSONL log and print a readiness report. |
+| `engine.py` | Orchestration: trust gating (with anomaly-based suspension), corroboration across independent families, the action ladder, rollout telemetry, the auditable vouch ledger, the curated banks, and `export_state`/`load_state` persistence. |
+| `extract.py` | Pure, tested link/invite classification for adapters (keeps the riskiest parsing out of untested per-bot code). |
+| `eval.py` | Labeled-corpus evaluation harness: scorecard (FP rate, wrongful punishments, recall, precision, evasions), threshold sweep, and JSONL ingestion of real labeled data. |
+| `cli.py` | `goodfaith replay` (shadow-replay a log) and `goodfaith eval` (score the corpus / a JSONL corpus / a sweep). |
 
 ## Data flow
 

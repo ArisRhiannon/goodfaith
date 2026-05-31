@@ -5,6 +5,33 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-31
+
+Evidence + durability pass: stop arguing efficacy, start measuring it.
+
+### Added
+- **Evaluation harness (`goodfaith.eval`, `goodfaith eval`).** A labeled,
+  multilingual, adversarial scenario corpus (benign / abuse / evasion) and a
+  scorer reporting the metrics that matter for a precision-biased system:
+  false-positive rate, wrongful punishments, recall, precision, and — honestly —
+  the evasions it misses by design. Ingests real hand-labeled exports via
+  `eval.load_jsonl()`, and `eval.sweep()` turns a threshold into a
+  precision/recall curve instead of a guess.
+- **State persistence (`Engine.export_state()` / `load_state()`).** Vouches and
+  the known-bad/known-good banks are JSON-serializable and survive restarts;
+  sliding windows remain ephemeral by design.
+- **`goodfaith.extract.classify()`** — a tested, pure link/invite classifier so
+  adapters stop hand-rolling the riskiest parsing. Correctly treats your own
+  server's invite as non-external (the bug the example adapter previously had).
+
+### Changed
+- Documented the single-event-loop concurrency assumption explicitly.
+- Trimmed the framing to match measured reality (see the Evaluation section); the
+  example adapter now uses `extract.classify`.
+
+[Unreleased]: https://github.com/ArisRhiannon/goodfaith/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ArisRhiannon/goodfaith/compare/v0.3.0...v0.4.0
+
 ## [0.3.0] - 2026-05-31
 
 Second hardening pass plus a relicense, from continued review.

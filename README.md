@@ -140,6 +140,45 @@ goodfaith replay messages.jsonl          # human report
 goodfaith replay messages.jsonl --json   # machine-readable
 ```
 
+## Evaluation
+
+Claims are cheap, so goodfaith ships a harness that measures them. `goodfaith eval`
+scores a labeled corpus and reports the metrics that actually matter for a
+precision-biased system. On the bundled corpus (default policy, ENFORCE):
+
+```text
+$ goodfaith eval
+goodfaith evaluation scorecard
+  benign scenarios   : 8 (44 messages)
+  FALSE POSITIVES    : 0  (rate 0.0000)
+  WRONGFUL PUNISH.   : 0   <- cardinal metric, target 0
+  abuse recall       : 5/5 (1.00)
+  precision          : 1.00
+  known evasions hit : 0/2 (by design, these are accepted misses)
+```
+
+And it turns threshold choices into data instead of vibes — here the FP cliff
+that justifies the conservative `neardup_min_tokens=5` default:
+
+```text
+$ goodfaith eval --sweep neardup_min_tokens --values 1,3,5
+{'neardup_min_tokens': 1, 'recall': 1.0, 'fp_rate': 0.023, 'wrongful_punishments': 0}
+{'neardup_min_tokens': 3, 'recall': 1.0, 'fp_rate': 0.023, 'wrongful_punishments': 0}
+{'neardup_min_tokens': 5, 'recall': 1.0, 'fp_rate': 0.000, 'wrongful_punishments': 0}
+```
+
+**Read these numbers honestly.** The corpus is **synthetic** and small (15
+scenarios, 44 benign messages), hand-written by the author. A 1.00 recall just
+means it catches *unsubtle* attacks; the two `evasion` scenarios — a fully
+trusted account's first malicious invite, and a lone non-allowlisted link — are
+missed **on purpose**, and the harness reports that rather than hiding it. So the
+real value here is threefold: (1) a hard regression contract — *zero* wrongful
+punishments and *zero* false positives on benign traffic, enforced in CI;
+(2) a reusable scorer that ingests **your** hand-labeled export
+(`goodfaith eval your_corpus.jsonl`) so you can get numbers that mean something on
+your server; (3) a sweep that finds the knee on real data. It is not, and does
+not claim to be, proof of real-world efficacy against a determined adversary.
+
 ## Tuning (per guild)
 
 Every threshold lives on an immutable [`Policy`](goodfaith/policy.py) (defaults
@@ -161,6 +200,12 @@ auditable trust grant (`engine.list_vouches(guild)` returns the ledger),
 `engine.add_known_bad(guild, text)` for a curated bad-content bank (entries
 decay), and `engine.mark_false_positive(guild, text)` to guarantee a corrected
 mistake can never repeat.
+
+Persistence and concurrency: that curated state is your investment, so persist it
+with `engine.export_state()` (JSON-serializable) and restore it on startup with
+`engine.load_state(...)` — the sliding windows are intentionally ephemeral. The
+engine assumes a single event loop (the discord.py model); give each thread or
+process its own `Engine` rather than sharing one across OS threads.
 
 ## Threat model & non-goals
 
