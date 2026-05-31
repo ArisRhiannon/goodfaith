@@ -5,13 +5,12 @@
 [![CI](https://github.com/ArisRhiannon/goodfaith/actions/workflows/ci.yml/badge.svg)](https://github.com/ArisRhiannon/goodfaith/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**TL;DR** — a precision-first automod for **small-to-mid, tight-knit communities**
-(hundreds to a few thousand members). It is tuned so that wrongly muting a regular
-is the expensive failure, which means it **deliberately lets some spam through**.
-
-- ✅ **Good fit** if trust is your scarce resource and a wrongful mute is worse than slow spam.
-- ⚠️ **Not** for 50k+ servers or sophisticated adversaries without first reading the **[threat model & non-goals](#threat-model--non-goals)**.
-- 🔍 Honest about limits: the **[red-team report](docs/REDTEAM.md)** lists what it misses; **[evaluation](#evaluation)** has the numbers.
+**TL;DR** — a precision-first automod for small-to-mid, tight-knit communities
+(hundreds to a few thousand members). It treats wrongly muting a regular as the
+expensive failure, so it deliberately lets some spam through. It is not meant for
+50k+ servers or determined adversaries. Read the [threat model](#threat-model--non-goals)
+for where it breaks down, the [red-team report](docs/REDTEAM.md) for what it
+misses, and [evaluation](#evaluation) for the numbers.
 
 Most automods optimize for catching spam. In a tight-knit community that is the
 wrong objective: a single wrongful mute of a long-time regular does more damage
