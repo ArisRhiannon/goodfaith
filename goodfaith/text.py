@@ -1,10 +1,17 @@
-"""64-bit SimHash + Hamming distance — a cheap near-duplicate primitive.
+"""Configurable-width SimHash + Hamming distance — a cheap near-duplicate primitive.
 
-SimHash (Charikar) projects a document to a 64-bit fingerprint such that similar
-documents have fingerprints differing in few bits. Comparing two fingerprints is
-a XOR + popcount → O(1), far cheaper than pairwise Jaccard.
+SimHash (Charikar) projects a document to a fixed-width fingerprint such that
+similar documents have fingerprints differing in few bits. Comparing two
+fingerprints is XOR + popcount → O(1), far cheaper than pairwise Jaccard.
 
-Privacy note: the engine stores only these 64-bit integers, never raw content.
+Width matters. A 64-bit fingerprint with a Hamming tolerance is prone to
+accidental near-collisions on short, low-entropy messages at chat scale, which
+manifests as phantom "coordination". goodfaith therefore defaults to **128 bits**
+(see ``GF_SIMHASH_BITS``) and additionally gates near-dup on a minimum token
+count, so two unrelated short messages are very unlikely to be judged similar.
+This is a heuristic, not a cryptographic guarantee.
+
+Privacy note: only these integers are stored, never raw content.
 """
 
 from __future__ import annotations
@@ -19,7 +26,8 @@ _ZERO_WIDTH = re.compile(
     r"[\u200b\u200c\u200d\u200e\u200f\u2060\ufeff\u00ad"
     r"\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069]"
 )
-_MASK64 = 0xFFFFFFFFFFFFFFFF
+
+DEFAULT_BITS = 128
 
 
 def normalize(text: str) -> str:
@@ -40,30 +48,32 @@ def tokens(text: str) -> list[str]:
     return _TOKEN_RE.findall(normalize(text))
 
 
-def _hash64(token: str) -> int:
-    return int.from_bytes(hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest(), "big")
+def _hash(token: str, nbytes: int) -> int:
+    digest = hashlib.blake2b(token.encode("utf-8"), digest_size=nbytes).digest()
+    return int.from_bytes(digest, "big")
 
 
-def simhash(text: str) -> int:
-    """Return a 64-bit fingerprint of ``text``; 0 when there are no tokens."""
+def simhash(text: str, bits: int = DEFAULT_BITS) -> int:
+    """Return a ``bits``-wide fingerprint of ``text``; 0 when there are no tokens."""
     toks = tokens(text)
     if not toks:
         return 0
-    vector = [0] * 64
+    nbytes = max(1, bits // 8)
+    vector = [0] * bits
     for tok in toks:
-        h = _hash64(tok)
-        for i in range(64):
+        h = _hash(tok, nbytes)
+        for i in range(bits):
             vector[i] += 1 if (h >> i) & 1 else -1
     fingerprint = 0
-    for i in range(64):
+    for i in range(bits):
         if vector[i] > 0:
             fingerprint |= 1 << i
     return fingerprint
 
 
 def hamming(a: int, b: int) -> int:
-    """Number of differing bits between two 64-bit fingerprints."""
-    return ((a ^ b) & _MASK64).bit_count()
+    """Number of differing bits between two fingerprints of equal width."""
+    return (a ^ b).bit_count()
 
 
 def near(a: int, b: int, max_distance: int) -> bool:

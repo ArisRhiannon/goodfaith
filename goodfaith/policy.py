@@ -35,11 +35,17 @@ class Policy:
     new_account_days: float = config.NEW_ACCOUNT_DAYS
 
     # Near-duplicate coordination
+    simhash_bits: int = config.SIMHASH_BITS
     simhash_max_hamming: int = config.SIMHASH_MAX_HAMMING
     neardup_window_seconds: int = config.NEARDUP_WINDOW_SECONDS
     neardup_min_distinct_users: int = config.NEARDUP_MIN_DISTINCT_USERS
     neardup_min_tokens: int = config.NEARDUP_MIN_TOKENS
     neardup_index_max: int = config.NEARDUP_INDEX_MAX
+
+    # Cross-user burst (single-vector mass raids)
+    burst_window_seconds: int = config.BURST_WINDOW_SECONDS
+    burst_min_distinct_users: int = config.BURST_MIN_DISTINCT_USERS
+    burst_index_max: int = config.BURST_INDEX_MAX
 
     # Frequency (observe-only)
     rapid_window_seconds: int = config.RAPID_WINDOW_SECONDS
@@ -51,6 +57,8 @@ class Policy:
     # Behavior allowlist
     emphasis_max_token_len: int = config.EMPHASIS_MAX_TOKEN_LEN
     short_message_tokens: int = config.SHORT_MESSAGE_TOKENS
+    # English-internet default; REPLACE wholesale per locale (e.g. frozenset() to
+    # rely purely on the language-agnostic structural gates), or extend below.
     agreement_words: frozenset[str] = config.AGREEMENT_WORDS
     extra_agreement_words: frozenset[str] = frozenset()
 

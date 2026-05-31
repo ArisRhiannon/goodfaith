@@ -42,11 +42,21 @@ ESTABLISHED_VOLUME_MSGS = _int("GF_ESTAB_VOLUME_MSGS", 100)
 NEW_ACCOUNT_DAYS = _float("GF_NEW_ACCOUNT_DAYS", 7.0)
 
 # ── Near-duplicate cross-user coordination ───────────────────────────────────
-SIMHASH_MAX_HAMMING = _int("GF_SIMHASH_HAMMING", 6)        # ≤6/64 bits ≈ near-identical
+SIMHASH_BITS = _int("GF_SIMHASH_BITS", 128)               # 128-bit resists chat-scale collisions
+SIMHASH_MAX_HAMMING = _int("GF_SIMHASH_HAMMING", 12)      # ≈ same ratio as 6/64, at 128 bits
 NEARDUP_WINDOW_SECONDS = _int("GF_NEARDUP_WINDOW", 30)
 NEARDUP_MIN_DISTINCT_USERS = _int("GF_NEARDUP_USERS", 3)   # ≥3 distinct accounts
 NEARDUP_MIN_TOKENS = _int("GF_NEARDUP_MIN_TOKENS", 5)      # only SUBSTANTIAL content
 NEARDUP_INDEX_MAX = _int("GF_NEARDUP_INDEX_MAX", 512)      # bounded memory (anti-OOM)
+
+# ── Cross-user burst (single-vector mass raids) ──────────────────────────────
+# When many distinct low-trust accounts trip the SAME high-precision signal in a
+# short window, that coordination is itself an independent corroborating signal —
+# so a mass invite-spam raid (one vector, no @everyone, not yet known-bad) can be
+# acted on even with mods offline, while a lone user sharing one invite cannot.
+BURST_WINDOW_SECONDS = _int("GF_BURST_WINDOW", 30)
+BURST_MIN_DISTINCT_USERS = _int("GF_BURST_USERS", 3)
+BURST_INDEX_MAX = _int("GF_BURST_INDEX_MAX", 512)
 
 # ── Frequency (NEVER punitive — only OBSERVE; real humans spam) ───────────────
 RAPID_WINDOW_SECONDS = _int("GF_RAPID_WINDOW", 7)
@@ -69,6 +79,14 @@ SHORT_MESSAGE_TOKENS = _int("GF_SHORT_TOKENS", 4)
 # Cross-user agreement pile-ons ("same", "this", "W", "fr"…) — the #1 near-dup
 # false-positive trap. Many distinct users posting the same short word of
 # agreement is community behavior, not coordinated spam.
+#
+# IMPORTANT: this default list is English-internet-centric and therefore
+# PAROCHIAL. It is meant to be replaced per community via
+# ``Policy(agreement_words=...)`` (or extended via ``extra_agreement_words``).
+# It is NOT the primary defense: pile-ons in *any* language are already shielded
+# structurally because short messages are excluded from near-dup (see
+# ``NEARDUP_MIN_TOKENS`` / ``SHORT_MESSAGE_TOKENS``). The lexicon only adds an
+# explicit "agreement_pileon" label for transparency.
 AGREEMENT_WORDS = frozenset({
     "same", "this", "real", "fr", "frfr", "w", "ww", "l", "ll", "based",
     "lol", "lmao", "lmaooo", "true", "facts", "fax", "+1", "yes", "no", "yep",

@@ -22,6 +22,8 @@ class WindowState:
         self._neardup: dict[int, collections.deque[tuple[float, int, int]]] = {}
         # (guild_id, user_id) -> deque[ts]
         self._freq: dict[tuple[int, int], collections.deque[float]] = {}
+        # guild_id -> deque[(ts, family, user_id)]  (cross-user, per-signal-family)
+        self._burst: dict[int, collections.deque[tuple[float, str, int]]] = {}
 
     def record_and_count_neardup(
         self, guild_id: int, user_id: int, fingerprint: int, now: float, policy: Policy
@@ -58,6 +60,30 @@ class WindowState:
             dq.popleft()
         return len(dq)
 
+    def record_and_count_family_burst(
+        self, guild_id: int, user_id: int, family: str, now: float, policy: Policy
+    ) -> int:
+        """Record that ``user_id`` tripped signal ``family`` and return how many
+        OTHER distinct users tripped the SAME family within the burst window.
+
+        This is how a single-vector mass raid (many fresh accounts each posting
+        an invite, no @everyone, not yet known-bad) becomes self-corroborating."""
+        dq = self._burst.setdefault(guild_id, collections.deque())
+        cutoff = now - policy.burst_window_seconds
+        while dq and dq[0][0] < cutoff:
+            dq.popleft()
+        while len(dq) >= policy.burst_index_max:
+            dq.popleft()
+
+        distinct: set[int] = set()
+        for ts, fam, uid in dq:
+            if ts < cutoff or uid == user_id or fam != family:
+                continue
+            distinct.add(uid)
+
+        dq.append((now, family, user_id))
+        return len(distinct)
+
     def prune(self, now: float, policy: Policy) -> None:
         cutoff = now - policy.neardup_window_seconds
         for gid in list(self._neardup):
@@ -73,3 +99,10 @@ class WindowState:
                 dq.popleft()
             if not dq:
                 del self._freq[key]
+        bcut = now - policy.burst_window_seconds
+        for gid in list(self._burst):
+            dq = self._burst[gid]
+            while dq and dq[0][0] < bcut:
+                dq.popleft()
+            if not dq:
+                del self._burst[gid]

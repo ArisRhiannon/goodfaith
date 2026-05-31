@@ -56,6 +56,18 @@ def detect_coordinated_neardup(distinct_users: int, policy: Policy) -> Signal | 
     return None
 
 
+def detect_coordinated_burst(distinct_users: int, policy: Policy) -> Signal | None:
+    """Many distinct low-trust accounts tripping the SAME high-precision signal in
+    a short window. Independent of *which* signal, so it corroborates single-vector
+    mass raids (e.g. invite floods) that would otherwise be one lonely key."""
+    if distinct_users >= policy.burst_min_distinct_users:
+        return Signal(
+            "coordinated_burst", Tier.HIGH, "burst",
+            f"{distinct_users} other accounts tripped the same signal in a short window",
+        )
+    return None
+
+
 def detect_rapid(count: int, policy: Policy) -> Signal | None:
     # High frequency: real humans (info-dumpers, the terminally online) do this.
     # Informative only (LOW) → at most OBSERVE, never a punishment.
