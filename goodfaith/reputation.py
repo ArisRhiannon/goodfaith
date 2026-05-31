@@ -3,10 +3,15 @@
 Trust is first-class here: it can be granted instantly by a moderator
 (:func:`goodfaith.engine.Engine.vouch`) via ``Account.reputation_override``.
 
-Deliberate invariant: **earned trust never decays.** A member who goes quiet for
-months and returns is still a regular — penalizing dormancy would manufacture
-exactly the false positives this project exists to prevent. The only thing that
-expires is the curated known-bad bank (see config ``KNOWN_BAD_TTL_SECONDS``).
+Deliberate invariant: **earned trust does not decay from inactivity.** A member
+who goes quiet for months and returns is still a regular — penalizing dormancy
+would manufacture exactly the false positives this project exists to prevent.
+
+This is not a blanket bypass, though. Trust here governs *reputation tier* only;
+the engine separately suspends a trusted account's immunity when it shows
+strongly corroborated danger (a likely compromised account or abused vouch),
+routing it to human review instead of waving it through. The only thing that
+expires automatically is the curated known-bad bank (config ``KNOWN_BAD_TTL_SECONDS``).
 """
 
 from __future__ import annotations

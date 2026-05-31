@@ -1,12 +1,17 @@
-"""Legitimate-behavior allowlist — the heart of zero false positives.
+"""Legitimate-behavior allowlist — the core of the false-positive-averse design.
 
 Grounded in how real Discord communities actually talk: terminally-online chat,
 neurodivergent info-dumping, emote/GIF walls, agreement pile-ons, copypasta.
-These patterns must NEVER be a false positive.
+These patterns must not be treated as violations.
 
 These functions do not decide punishments. They decide which *frequency /
 repetition* signals to suppress. Dangerous-content signals (external invites,
 phishing, known-bad) are never suppressed by a legitimate pattern.
+
+Note on language: the agreement-word lexicon (see ``config``/``Policy``) is an
+English-internet default and is meant to be replaced per locale. The primary,
+language-agnostic shield is structural — short messages are excluded from
+near-dup regardless of their words.
 """
 
 from __future__ import annotations

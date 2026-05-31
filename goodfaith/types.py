@@ -4,9 +4,11 @@ The engine only ever sees opaque integer IDs and a message's text. It never
 needs usernames, emails, or any other PII, and it never persists raw message
 content (only fixed-width SimHash fingerprints). See ``docs/ARCHITECTURE.md``.
 
-Design philosophy: **zero false positives above all.** Detection *confidence*
-is deliberately decoupled from action *severity* (a "defer band"), and no
-punitive action is ever taken on a single signal (the rule of corroboration).
+Design philosophy: **strongly favor precision over recall.** A wrongful action
+against a regular is treated as far more costly than missing a spammer — an
+explicit, tunable bias, not a guarantee of zero false positives. Detection
+*confidence* is deliberately decoupled from action *severity* (a "defer band"),
+and no punitive action is taken without corroboration from independent signals.
 """
 
 from __future__ import annotations
