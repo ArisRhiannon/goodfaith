@@ -34,3 +34,19 @@ def test_hamming_zero_for_equal():
 
 def test_zero_fingerprint_never_near():
     assert not near(0, simhash("anything here"), 6)
+
+
+def test_default_width_is_128_bit():
+    fp = simhash("a reasonably long message with several distinct tokens here")
+    assert 0 < fp < (1 << 128)
+
+
+def test_width_is_configurable():
+    fp64 = simhash("a reasonably long message with several distinct tokens here", bits=64)
+    assert 0 < fp64 < (1 << 64)
+
+
+def test_near_works_at_128_bit():
+    a = simhash("join my free nitro giveaway server right now please everyone")
+    b = simhash("join my free nitro giveaway server right now please everyone!!!")
+    assert near(a, b, 12)

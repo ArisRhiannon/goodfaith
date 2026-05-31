@@ -28,7 +28,9 @@ def test_canary_holds_punitive_but_acts_on_reversible(mk):
     eng = Engine(Policy(mode=Mode.CANARY))
     # Punitive is held back in canary.
     assert _punitive(eng, mk).enforced is False
-    # A reversible non-punitive action (quarantine of a lone-key newcomer) is enforced.
-    d = eng.evaluate(mk(900, "join us discord.gg/x", external_invite=True,
+    # A reversible non-punitive action (quarantine of a lone-key newcomer) is
+    # enforced. Use a fresh guild so the earlier raid's burst window doesn't
+    # corroborate this isolated invite.
+    d = eng.evaluate(mk(900, "join us discord.gg/x", guild_id=2, external_invite=True,
                         invite_urls=("discord.gg/x",)))
     assert d.action == Action.QUARANTINE and d.enforced is True

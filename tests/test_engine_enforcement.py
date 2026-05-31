@@ -47,9 +47,10 @@ def test_mass_mention_raid_is_a_key(mk):
 
 
 def test_raising_corroboration_threshold_blocks_punishment(mk):
-    eng = _engine(keys_for_punitive=3)  # demand 3 independent families
+    eng = _engine(keys_for_punitive=4)  # demand 4 independent families
     d = None
     for i in range(4):
         d = eng.evaluate(mk(500 + i, _SPAM, external_invite=True, invite_urls=("discord.gg/x",)))
-    # Only two families available → cannot reach punitive under a 3-family policy.
+    # At most three families are available (invite + neardup + cross-user burst),
+    # so a 4-family policy keeps this short of an automatic punishment.
     assert d.action < Action.PUNITIVE
