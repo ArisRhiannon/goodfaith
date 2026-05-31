@@ -18,6 +18,7 @@ Honesty notes:
 from __future__ import annotations
 
 import json
+import random
 from dataclasses import dataclass, field, replace
 
 from .engine import Engine
@@ -184,6 +185,65 @@ def corpus() -> list[Scenario]:
                  [_msg(160, "check this out http://sketchy.tld/x", unsafe=("http://sketchy.tld/x",))],
                  note="a single non-allowlisted link is never a key — real users post links"),
     ]
+
+
+# Multilingual word pool for generated chatter (varied -> low accidental overlap).
+_VOCAB = (
+    "pacing soundtrack finale episode arc character development animation dialogue "
+    "worldbuilding cliffhanger plot twist scene foreshadowing voice acting opening "
+    "ritmo capitulo banda sonora personaje desenlace temporada animacion guion "
+    "musik folge charakter spannung szene geschichte synchronisation handlung "
+    "ongaku enshutsu sakuga monogatari tenkai fukusen seiyuu kyara saishuukai "
+    "rythme episode personnage intrigue saison doublage scene histoire denouement "
+    "enredo trilha elenco temporada cena reviravolta narrativa dublagem estreia "
+    "syuzhet muzyka personazh stsena razvyazka sezon ozvuchka animatsiya epizod"
+).split()
+_AGREE = ("same this real fr w true facts based mood valid bet gg "
+          "deacuerdo cierto obvio verdad doui echt sim da evet aynen").split()
+_EMOTES = ("<:pog:1>", "🎉🎉", "😂😂😂", "<a:hype:2>🔥", "💀💀", "👀", "<:kek:3><:w:4>", "🥳🎊")
+
+
+def generate(seed: int = 0, benign: int = 2000) -> list[Scenario]:
+    """A larger, deterministic SYNTHETIC corpus to stress the false-positive surface.
+
+    It is STILL synthetic — only as good as these pools. It does not replace real,
+    hand-labeled data (see :func:`load_jsonl`); it makes the "0 wrongful punishments"
+    regression contract bite over thousands of diverse messages instead of dozens.
+    """
+    rng = random.Random(seed)
+    scenarios = list(corpus())  # keep the small, readable, curated set
+
+    # Varied multilingual chatter, one message per distinct user, timestamps spread
+    # across the near-dup window. A clean engine must act on NONE of it.
+    scenarios.append(Scenario(
+        "synthetic_chatter_firehose", "benign",
+        [_msg(3000 + i, " ".join(rng.sample(_VOCAB, 8)), mid=3000 + i, at=1000.0 + i * 2)
+         for i in range(benign)],
+        note=f"{benign} distinct multilingual messages from distinct users"))
+    # Short agreement pile-ons in many languages (the structural short-message shield).
+    scenarios.append(Scenario(
+        "agreement_firehose", "benign",
+        [_msg(20000 + i, rng.choice(_AGREE), mid=20000 + i, at=1000.0 + i) for i in range(400)]))
+    # Emote/emoji-only walls.
+    scenarios.append(Scenario(
+        "emote_firehose", "benign",
+        [_msg(30000 + i, rng.choice(_EMOTES), mid=30000 + i) for i in range(200)]))
+    # More abuse breadth: independent invite-flood raids (cross-user burst).
+    for r in range(5):
+        base = 50000 + r * 100
+        scenarios.append(Scenario(
+            f"invite_flood_{r}", "abuse",
+            [_msg(base + i, f"join discord.gg/raid{r}", mid=base + i,
+                  ev=True, inv=(f"discord.gg/raid{r}",), at=1000.0 + i) for i in range(7)]))
+    # More evasion breadth: text-fingerprint tricks the design knowingly misses.
+    scenarios.append(Scenario("letter_spacing", "evasion",
+                              [_msg(60000, "f r e e n i t r o g i v e a w a y c l i c k")]))
+    scenarios.append(Scenario("leetspeak", "evasion",
+                              [_msg(60001, "fr33 d1sc0rd n1tr0 g1v34w4y cl1ck th3 l1nk")]))
+    scenarios.append(Scenario("padded_known_bad", "evasion",
+                              [_msg(60002, _BAD + " " + " ".join(f"w{i}" for i in range(40)))],
+                              known_bad=(_BAD,)))
+    return scenarios
 
 
 def evaluate(scenarios: list[Scenario] | None = None, policy: Policy | None = None) -> Scorecard:
