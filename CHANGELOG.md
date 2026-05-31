@@ -5,6 +5,35 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-31
+
+Rigor and honesty pass, in response to external review.
+
+### Added
+- **Scaled evaluation.** `eval.generate()` and `goodfaith eval --generated`
+  produce a larger, deterministic **synthetic** corpus; the cardinal contract now
+  holds across **2,644 benign messages → 0 false positives / 0 wrongful
+  punishments** (still synthetic — `load_jsonl` remains the bridge to real data).
+- **`docs/REDTEAM.md`** — the full red-team report behind the "internal red-team
+  pass" phrasing: scope, method, every finding with its measured number, the fixes
+  shipped, and the limitations that remain open and why.
+
+### Changed
+- README restructured for quick evaluation: a TL;DR / "is this for you?" block up
+  top with direct links to the threat model, red-team report, and evaluation.
+- Reworded the zero-dependency framing as a deliberate, bounded architectural
+  choice (with the explicit caveat that complex parsing belongs in the adapter),
+  not an accident.
+- Precised the "language-agnostic" claim: the structural shield is
+  language-independent **for short content**; longer multilingual coordination
+  goes through the review-only near-dup path, not a free pass.
+
+### Fixed
+- Removed a duplicated bullet in the README guardrails list.
+
+[Unreleased]: https://github.com/ArisRhiannon/goodfaith/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/ArisRhiannon/goodfaith/compare/v0.5.2...v0.6.0
+
 ## [0.5.2] - 2026-05-31
 
 A second adversarial ("rainbow teaming") pass. Every change verified to keep the

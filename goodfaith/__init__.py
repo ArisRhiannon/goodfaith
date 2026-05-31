@@ -12,7 +12,7 @@ from .engine import Engine, ReadinessReport
 from .policy import Policy
 from .types import Account, Action, Decision, Message, Mode, Signal, Tier
 
-__version__ = "0.5.2"
+__version__ = "0.6.0"
 
 __all__ = [
     "Engine",
