@@ -54,6 +54,7 @@ class ReadinessReport:
     seen: int
     would_touch: int
     would_punish: int
+    would_review: int = 0
 
     @property
     def punish_rate(self) -> float:
@@ -63,6 +64,15 @@ class ReadinessReport:
     def touch_rate(self) -> float:
         return self.would_touch / self.seen if self.seen else 0.0
 
+    @property
+    def review_rate(self) -> float:
+        """Share of messages that would land in the human-review queue.
+
+        On a large, understaffed server a high review_rate is the warning that
+        the HOLD/QUARANTINE queue will grow faster than mods can clear it —
+        consider ``Policy(quarantine_unattended_holds=True)`` or tighter scoping."""
+        return self.would_review / self.seen if self.seen else 0.0
+
     def ready(self, min_seen: int = 1000, max_punish_rate: float = 0.0) -> bool:
         return self.seen >= min_seen and self.punish_rate <= max_punish_rate
 
@@ -71,6 +81,7 @@ class ReadinessReport:
 class _Stats:
     seen: int = 0
     would_touch: int = 0
+    would_review: int = 0
     would_punish: int = 0
     by_action: Counter = field(default_factory=Counter)
 
@@ -160,7 +171,7 @@ class Engine:
     # ── Telemetry ────────────────────────────────────────────────────────
     def readiness(self, guild_id: int) -> ReadinessReport:
         s = self._stats.get(guild_id, _Stats())
-        return ReadinessReport(guild_id, s.seen, s.would_touch, s.would_punish)
+        return ReadinessReport(guild_id, s.seen, s.would_touch, s.would_punish, s.would_review)
 
     def _record(self, guild_id: int, decision: Decision) -> None:
         s = self._stats.setdefault(guild_id, _Stats())
@@ -168,6 +179,8 @@ class Engine:
         s.by_action[decision.action.name] += 1
         if decision.touches_message:
             s.would_touch += 1
+        if decision.action in (Action.QUARANTINE, Action.HOLD):
+            s.would_review += 1
         if decision.punished:
             s.would_punish += 1
 
@@ -263,8 +276,13 @@ class Engine:
             return Decision(Action.PUNITIVE, 0.9, keys=keys, reasons=reasons,
                             allowlisted=allow_patterns, reversible=True)
 
-        # Non-trusted, exactly one family → human review, NEVER an automatic punishment.
-        action = Action.QUARANTINE if reputation.is_new_account(acc, policy) else Action.HOLD
+        # Non-trusted, exactly one family → human review, NEVER an automatic
+        # punishment. New accounts are quarantined (reversible); older accounts
+        # are held for review — unless the guild opts to quarantine unattended
+        # holds so flagged content does not sit in a queue nobody is working.
+        new = reputation.is_new_account(acc, policy)
+        action = (Action.QUARANTINE if new or policy.quarantine_unattended_holds
+                  else Action.HOLD)
         return Decision(action, 0.6, keys=keys, reasons=reasons,
                         allowlisted=allow_patterns, reversible=True)
 

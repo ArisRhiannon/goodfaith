@@ -29,6 +29,7 @@ def _message_from(obj: dict) -> Message:
         account_age_days=float(obj.get("account_age_days", 999.0)),
         server_age_days=float(obj.get("server_age_days", 999.0)),
         msg_count=int(obj.get("msg_count", 0)),
+        active_days=int(obj.get("active_days", 0)),
         is_staff=bool(obj.get("is_staff", False)),
     )
     return Message(
@@ -65,8 +66,10 @@ def _report(engine: Engine, as_json: bool) -> None:
             out[str(gid)] = {
                 "seen": r.seen,
                 "would_touch": r.would_touch,
+                "would_review": r.would_review,
                 "would_punish": r.would_punish,
                 "punish_rate": r.punish_rate,
+                "review_rate": r.review_rate,
                 "ready": r.ready(),
                 "by_action": dict(s.by_action),
             }
@@ -77,7 +80,8 @@ def _report(engine: Engine, as_json: bool) -> None:
         s = engine._stats[gid]  # noqa: SLF001
         breakdown = ", ".join(f"{k}={v}" for k, v in sorted(s.by_action.items()))
         print(f"guild {gid}: seen={r.seen} would_touch={r.would_touch} "
-              f"would_punish={r.would_punish} punish_rate={r.punish_rate:.4f} "
+              f"would_review={r.would_review} would_punish={r.would_punish} "
+              f"punish_rate={r.punish_rate:.4f} review_rate={r.review_rate:.4f} "
               f"ready={r.ready()}")
         print(f"  actions: {breakdown}")
 

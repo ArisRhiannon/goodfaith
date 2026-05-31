@@ -89,6 +89,7 @@ class GoodFaith(commands.Cog):
             account_age_days=_account_age_days(member.id),
             server_age_days=server_age,
             msg_count=self._message_count(message.guild.id, member.id),
+            active_days=self._active_days(message.guild.id, member.id),
             has_avatar=getattr(member, "avatar", None) is not None,
             is_staff=is_staff,
         )
@@ -111,6 +112,11 @@ class GoodFaith(commands.Cog):
 
     def _message_count(self, guild_id: int, user_id: int) -> int:
         # Plug in your own per-guild message counter — the core trust signal.
+        return 0
+
+    def _active_days(self, guild_id: int, user_id: int) -> int:
+        # Plug in your own count of DISTINCT days this member has posted. Harder
+        # to farm than raw message count; gates the established-by-volume tier.
         return 0
 
 
