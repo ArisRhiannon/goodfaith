@@ -233,6 +233,12 @@ goodfaith is tuned to avoid it.
   modqueue, those cases sit.
 - **Not a silver bullet for raids.** The burst detector catches simple high-volume
   raids; a slow, low-and-distributed campaign can still stay under thresholds.
+- **Evasion is made costly, not impossible.** An internal red-team pass (v0.5.0)
+  closed the sharp edges — false-positive feedback can no longer whitelist a live
+  invite, misconfiguration fails loud instead of silently disabling detection,
+  state and memory are bounded, and homoglyph / scheme-less-link tricks are
+  folded or detected. A determined adversary who studies the thresholds can still
+  find seams; these are mitigations, not guarantees.
 
 If you run a large or high-threat server, treat goodfaith as one precision-first
 layer in a defense-in-depth setup, run it in shadow first, and tune aggressively.

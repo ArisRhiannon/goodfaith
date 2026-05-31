@@ -5,6 +5,43 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-31
+
+Security hardening from an internal red-team pass (each fix ships with a
+regression test reproducing the original proof-of-concept).
+
+### Fixed
+- **False-positive feedback could whitelist a live attack.** `mark_false_positive`
+  forced an unconditional ALLOW *before* any detector ran, and the SimHash
+  fingerprint ignores URLs — so appending an invite to a known-good text smuggled
+  it through. FP feedback now suppresses only the similarity-derived families
+  (near-dup / known-bad) it is meant to correct, never a live invite/raid/link.
+- **Misconfiguration silently disabled detection.** A bad `GF_SIMHASH_BITS`
+  (`0`/negative) made every content check a no-op. `Policy` now validates its
+  numeric ranges and fails loud.
+- **Unbounded memory.** The sliding-window key space is now pruned periodically,
+  and the curated known-bad/known-good banks are FIFO-capped
+  (`known_bad_max`/`known_good_max`), bounding both memory and the per-message scan.
+- **`load_state` trusted its input.** It now validates types, skips malformed
+  entries, and caps sizes instead of crashing on a corrupt/tampered snapshot.
+
+### Added
+- Scheme-less and dot-obfuscated link detection (`evil.com`, `evil [dot] com`) as
+  a LOW signal, kept tight so `node.js`/`main.py`/emails are not flagged.
+- `@everyone` + external invite from a new account now trips the raid detector.
+- Mixed-script homoglyph folding (e.g. Cyrillic look-alikes) so a one-character
+  swap no longer defeats near-dup; pure non-Latin and accented-Latin text is
+  left untouched.
+- Future-dated `created_at` is clamped to wall clock so a spoofed timestamp can't
+  dodge the burst window.
+
+### Changed
+- The curated banks now require substantial content; a low-entropy entry would
+  collide broadly and cause false positives.
+
+[Unreleased]: https://github.com/ArisRhiannon/goodfaith/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/ArisRhiannon/goodfaith/compare/v0.4.0...v0.5.0
+
 ## [0.4.0] - 2026-05-31
 
 Evidence + durability pass: stop arguing efficacy, start measuring it.
