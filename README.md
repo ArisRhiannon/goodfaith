@@ -1,6 +1,6 @@
 # goodfaith
 
-> A trust-first Discord automoderation engine that would rather miss a spammer than mute a regular. **Zero false positives by design.**
+> A trust-first Discord automod for tight-knit communities. It treats muting a regular as far worse than missing a spammer — and makes that trade-off **explicit, tunable, and auditable**.
 
 [![CI](https://github.com/ArisRhiannon/goodfaith/actions/workflows/ci.yml/badge.svg)](https://github.com/ArisRhiannon/goodfaith/actions/workflows/ci.yml)
 [![License: AGPL-3.0 + Commercial](https://img.shields.io/badge/license-AGPL--3.0%20%2B%20Commercial-blue.svg)](LICENSE)
@@ -8,26 +8,35 @@
 Most automods optimize for catching spam. In a tight-knit community that is the
 wrong objective: a single wrongful mute of a long-time regular does more damage
 to trust than ten spam messages that linger for a few extra seconds. **goodfaith
-inverts the priority.** It is built so that the cost of a false positive is
-treated as far higher than the cost of a false negative, and it makes that
-trade-off explicit, tunable, and auditable.
+inverts the priority** — it is built to favor precision over recall, treating a
+false positive as far costlier than a false negative.
+
+To be clear about what that is and is not: this is a deliberate, configurable
+**bias**, not a guarantee. "Zero false positives" is not a property any real
+classifier can promise, and the flip side of this design is that it will
+knowingly let some spam through (a higher false-negative rate) to protect your
+regulars. See the [threat model & non-goals](#threat-model--non-goals).
 
 The engine is **pure Python, has no runtime dependencies, holds no discord.py
-dependency, and stores no personal data** — only opaque integer IDs and 64-bit
+dependency, and stores no personal data** — only opaque integer IDs and SimHash
 fingerprints. Drop it into any bot through a thin adapter (see
 [`examples/discord_adapter.py`](examples/discord_adapter.py)).
 
 > It is a clean-room, standalone rework of the private automod that runs on a
-> real ~1,200-member community. See **[field validation](docs/METHODOLOGY.md)**.
+> real ~1,200-member community. See **[field validation](docs/METHODOLOGY.md)**
+> — including, honestly, what that validation does *not* cover.
 
 ## Why it (almost) never false-positives
 
 Five independent guardrails, any one of which is usually enough to spare a regular:
 
-1. **Trust is first-class.** Staff are immune; established members and anyone a
-   moderator has `vouch()`ed are never punished — at most their message is
-   soft-deleted, and only on a near-certain known-bad hit. Earned trust never
-   decays: a member who goes quiet for months and returns is still a regular.
+1. **Trust is first-class — but not a blanket bypass.** Staff are immune;
+   established members and anyone a moderator has `vouch()`ed are never
+   *auto-punished*. Earned trust does not decay from inactivity (a returning
+   regular is still a regular). The exception is deliberate: a trusted account
+   showing strongly corroborated danger — the signature of a compromised account
+   or an abused vouch — is routed to human review (`HOLD`), not waved through.
+   Vouches are recorded with who/why/when so the trust graph is auditable.
 2. **Detection confidence is decoupled from action severity.** A signal firing
    does not imply a punishment. Verdicts climb a ladder
    (`ALLOW → OBSERVE → SOFT → QUARANTINE → HOLD → PUNITIVE`) and most stop early.
@@ -35,12 +44,24 @@ Five independent guardrails, any one of which is usually enough to spare a regul
    signals from *different detector families* (e.g. an external invite **and**
    coordinated cross-user duplication). One signal is only ever held for human
    review — never an automatic punishment.
-4. **A legitimate-behavior allowlist** grounded in how real communities talk:
-   agreement pile-ons (`same`, `this`, `W`, `fr`), emote/GIF walls, emphasis
-   (`WWWW`), one-thought-per-message texting, and markdown. These suppress
-   frequency/repetition signals so normal chatter never escalates.
+3. **Corroboration from independent sources.** A timeout requires multiple HIGH
+   signals from *different detector families* (e.g. an external invite **and**
+   coordinated cross-user duplication). One isolated signal is only ever held
+   for human review — never an automatic punishment. A single-vector mass raid
+   still escalates, because *many distinct fresh accounts tripping the same
+   signal at once* is itself an independent corroborating family (the cross-user
+   **burst** detector) — so an invite flood is caught even with mods offline,
+   while a lone user sharing one invite is not.
+4. **A replaceable legitimate-behavior allowlist** grounded in how real
+   communities talk: agreement pile-ons (`same`, `this`, `W`, `fr`), emote/GIF
+   walls, emphasis (`WWWW`), one-thought-per-message texting, and markdown. The
+   word list is an English-internet default you can replace per locale; the
+   primary shield is *structural and language-agnostic* — short messages never
+   enter the duplicate index, so pile-ons in any language are safe.
 5. **Reversible actions only.** The single punitive action is a temporary,
    appealable timeout; everything else is a delete that stays in your logs.
+   (Reversibility limits damage; it does not erase the experience of a wrongful
+   action — which is exactly why the bias and the shadow-first rollout exist.)
 
 Everything punitive demands a *non-trusted* author **and** corroboration, so the
 people most likely to be wrongly hit — your regulars — are structurally protected.
@@ -60,8 +81,9 @@ people most likely to be wrongly hit — your regulars — are structurally prot
 ```
 
 HIGH-precision keys: external invite, curated known-bad match, coordinated
-cross-user near-duplicate, and `@everyone` + link from a new account. Generic
-links and high posting frequency are **informational only** and never punish.
+cross-user near-duplicate, `@everyone` + link from a new account, and a
+cross-user **burst** (many low-trust accounts tripping the same signal at once).
+Generic links and high posting frequency are **informational only** and never punish.
 
 ## Install
 
@@ -123,21 +145,54 @@ are conservative and also overridable via `GF_*` environment variables):
 ```python
 engine.set_policy(guild_id, Policy(
     mode=Mode.ENFORCE,
-    keys_for_punitive=2,                 # raise to demand more corroboration
-    channel_allowlist=frozenset({123}),  # never moderate #memes
-    extra_agreement_words=frozenset({"basé", "kekw"}),
+    keys_for_punitive=2,                  # raise to demand more corroboration
+    simhash_bits=128,                     # widen further if you wish
+    channel_allowlist=frozenset({123}),   # never moderate #memes
+    agreement_words=frozenset(),          # drop the English lexicon for a non-EN server
+    extra_agreement_words=frozenset({"de acuerdo", "cierto"}),
 ))
 ```
 
-Operational hooks: `engine.vouch(guild, user)` to grant instant trust,
+Operational hooks: `engine.vouch(guild, user, actor_id=..., reason=...)` for an
+auditable trust grant (`engine.list_vouches(guild)` returns the ledger),
 `engine.add_known_bad(guild, text)` for a curated bad-content bank (entries
 decay), and `engine.mark_false_positive(guild, text)` to guarantee a corrected
 mistake can never repeat.
 
+## Threat model & non-goals
+
+Being honest about scope is part of the design.
+
+**Built for:** small-to-mid, tight-knit communities (roughly hundreds to a few
+thousand members) where trust is the scarce resource and moderators are not
+watching 24/7. There, wrongly muting a regular is the expensive failure, and
+goodfaith is tuned to avoid it.
+
+**Explicitly *not* claimed:**
+
+- **Not "zero false positives."** No data-driven classifier can guarantee that.
+  This is a precision-biased system that *accepts more false negatives* (spam it
+  lets through) to protect regulars. If your priority is maximal spam capture,
+  this is the wrong tool.
+- **Not validated against sophisticated, large-scale adversaries.** The field
+  evidence comes from a ~1,200-member community. Botnets, 100k–1M-member servers,
+  and burner accounts farmed for weeks to bank trust before turning malicious are
+  a *different* threat class this has not been tested against. The trust model is
+  in fact a liability there, partially mitigated — not solved — by the
+  anomaly-based suspension and cross-user burst detection.
+- **Not a replacement for human moderation.** `HOLD`/`QUARANTINE` exist precisely
+  because the engine defers ambiguous cases to people. If nobody works the
+  modqueue, those cases sit.
+- **Not a silver bullet for raids.** The burst detector catches simple high-volume
+  raids; a slow, low-and-distributed campaign can still stay under thresholds.
+
+If you run a large or high-threat server, treat goodfaith as one precision-first
+layer in a defense-in-depth setup, run it in shadow first, and tune aggressively.
+
 ## Privacy
 
 The engine never receives usernames, emails, or message history, and never
-stores raw content — only integer IDs and 64-bit SimHash fingerprints. See
+stores raw content — only integer IDs and SimHash fingerprints. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Documentation

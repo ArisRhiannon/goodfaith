@@ -41,6 +41,11 @@ did not manufacture false positives against the people it most wants to protect.
 - a labelled benchmark with published precision/recall numbers;
 - a model trained on a dataset (there is no model and no training — the engine is
   deterministic rules over explicit signals);
+- evidence about **sophisticated or large-scale adversaries**. A ~1,200-member
+  community does not exercise botnets, 100k–1M-member servers, or burner accounts
+  aged for weeks to bank trust before turning. Those are a different threat class
+  (see the README's *Threat model & non-goals*), and this validation says nothing
+  about them;
 - a promise that your community's norms match the one it was observed on.
 
 We deliberately describe this as *field validation*, not "trained on N messages".

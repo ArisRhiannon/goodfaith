@@ -12,12 +12,12 @@ and safe to trust.
 | `types.py` | The data model: `Action`, `Tier`, `Mode`, `Signal`, `Account`, `Message`, `Decision`. No logic beyond `Decision.explain()`. |
 | `config.py` | Conservative defaults, overridable via `GF_*` environment variables. Houses the agreement-word lexicon. |
 | `policy.py` | `Policy` — the per-guild tunable surface (mode, thresholds, allowlists). Immutable. |
-| `text.py` | Normalization + 64-bit SimHash and Hamming distance for near-duplicate detection. |
-| `behavior.py` | The legitimate-behavior allowlist. Decides which frequency/repetition signals to **suppress**. |
-| `reputation.py` | Trust tiers (`trusted`/`established`/`regular`/`newcomer`) and the trust invariants. |
-| `signals.py` | The danger detectors. Tags each signal with a `Tier` and a detector `family`. |
-| `windows.py` | Bounded sliding-window state for cross-user near-dup and per-user frequency. |
-| `engine.py` | Orchestration: trust gating, corroboration, the action ladder, rollout telemetry, and the curated banks. |
+| `text.py` | Normalization + configurable-width SimHash (**128-bit default**) and Hamming distance for near-duplicate detection. |
+| `behavior.py` | The legitimate-behavior allowlist. Decides which frequency/repetition signals to **suppress**. The agreement lexicon is a replaceable, locale-specific default; short-message gating is the language-agnostic shield. |
+| `reputation.py` | Trust tiers (`trusted`/`established`/`regular`/`newcomer`) and the trust invariants. Tier resists dormancy; the *engine* suspends immunity on anomaly. |
+| `signals.py` | The danger detectors, including the cross-user **burst** detector. Tags each signal with a `Tier` and a detector `family`. |
+| `windows.py` | Bounded sliding-window state for cross-user near-dup, per-user frequency, and per-family burst. |
+| `engine.py` | Orchestration: trust gating (with anomaly-based suspension), corroboration across independent families, the action ladder, rollout telemetry, the auditable vouch ledger, and the curated banks. |
 | `cli.py` | `goodfaith replay` — shadow-replay a JSONL log and print a readiness report. |
 
 ## Data flow
@@ -37,20 +37,23 @@ Message ─▶ Engine.evaluate
 
 ## The decision rule
 
-Let `families` = the set of distinct detector families among the HIGH keys.
+Let `families` = the set of distinct detector families among the HIGH keys. The
+cross-user **burst** is one such family: it is added when many distinct low-trust
+accounts trip the same dangerous-content signal in a short window.
 
 | Condition | Verdict |
 |-----------|---------|
 | no keys, no signals | `ALLOW` |
 | no keys, some LOW signals | `OBSERVE` |
-| author trusted/established/vouched | `OBSERVE` (or `SOFT` if known-bad) — never punitive |
+| trusted/established/vouched, `len(families) >= keys_for_punitive` | `HOLD` — likely compromise / abused vouch → review (never auto-punished) |
+| trusted/established/vouched, one family | `SOFT` if known-bad, else `OBSERVE` |
 | `len(families) >= keys_for_punitive`, untrusted | `PUNITIVE` (reversible timeout) |
 | exactly one family, untrusted, new account | `QUARANTINE` (reversible, for review) |
 | exactly one family, untrusted, older account | `HOLD` (modqueue, no user penalty) |
 
 The crucial property: **punitive action requires both a non-trusted author and
-corroboration from independent families.** Either condition failing downgrades
-the verdict to review-only.
+corroboration from independent families.** Trust removes the punitive option but
+not scrutiny — corroborated danger from a trusted account is still held for review.
 
 ## Why these signals are "high precision"
 
@@ -64,6 +67,10 @@ message:
   "substantial", so pile-ons never qualify. URLs and custom emotes are stripped
   before hashing, so sharing the same GIF/link is not "coordination".
 - **mass-mention raid** — `@everyone`/`@here` + a link from a new account.
+- **cross-user burst** — ≥N distinct low-trust accounts tripping the *same*
+  dangerous-content family (invite/known-bad/raid) within a short window. This is
+  what makes a single-vector flood self-corroborating. Near-duplication is
+  deliberately excluded from burst, so a legitimate copypasta chain is not escalated.
 
 Generic links (`unsafe_link`) and high posting frequency (`rapid_frequency`) are
 `LOW`: informational, capped at `OBSERVE`, never a key. Real humans post links
@@ -71,14 +78,15 @@ and info-dump constantly.
 
 ## Memory & safety
 
-All window state is bounded by both time and a hard size cap
-(`neardup_index_max`), so a raid cannot grow memory without limit — the failure
-mode of many naive automods. The curated known-bad bank decays by TTL so stale
-entries cannot resurface as a surprise months later.
+All window state is bounded by both time and a hard size cap (`neardup_index_max`,
+`burst_index_max`), so a raid cannot grow memory without limit — the failure mode
+of many naive automods. The curated known-bad bank decays by TTL so stale entries
+cannot resurface as a surprise months later.
 
 ## Privacy
 
 The engine only ever sees integer IDs and message text, and it persists only
-64-bit SimHash integers (in the known-good/known-bad banks). It never stores
-usernames, raw content, or message history. Reputation inputs (account age,
-tenure, message count) are supplied by the adapter as plain numbers.
+SimHash integers (in the known-good/known-bad banks) plus vouch metadata
+(actor/reason/timestamp you supply). It never stores usernames, raw content, or
+message history. Reputation inputs (account age, tenure, message count) are
+supplied by the adapter as plain numbers.
