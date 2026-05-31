@@ -23,13 +23,19 @@ def test_trusted_by_tenure_and_volume():
     assert is_trusted(acc, P)
 
 
-def test_established_by_volume_requires_non_new_account():
+def test_established_by_volume_requires_non_new_account_and_active_days():
     # 100+ msgs but a brand-new account → NOT established (patient spammer guard).
-    spammer = Account(user_id=1, account_age_days=0.2, server_age_days=0.0, msg_count=500)
+    spammer = Account(user_id=1, account_age_days=0.2, server_age_days=0.0, msg_count=500,
+                      active_days=1)
     assert tier(spammer, P) == NEWCOMER
-    # Same volume on an aged account → established.
-    real = Account(user_id=2, account_age_days=90, server_age_days=0.0, msg_count=500)
+    # Aged account + volume + activity across several days → established.
+    real = Account(user_id=2, account_age_days=90, server_age_days=0.0, msg_count=500,
+                   active_days=20)
     assert tier(real, P) == ESTABLISHED
+    # Aged burner: 500 msgs dumped over a single day → denied the volume shortcut.
+    burner = Account(user_id=3, account_age_days=14, server_age_days=0.0, msg_count=500,
+                     active_days=1)
+    assert tier(burner, P) == NEWCOMER
 
 
 def test_regular_tier():

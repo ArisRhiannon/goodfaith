@@ -96,3 +96,49 @@ def test_short_messages_are_shielded_without_any_lexicon():
     p = Policy(agreement_words=frozenset())
     assert not is_agreement_word("同意", p)
     assert not is_substantial("同意", p)
+
+
+# ── Aged burner farms don't buy the trust path (critique: 2-week farmed accounts)
+
+def test_burner_farm_does_not_buy_the_trust_path(mk):
+    eng = Engine(Policy(mode=Mode.ENFORCE))
+    eng.add_known_bad(1, _SPAM)
+    # 2-week-old account, lots of messages, but active on only one day → the
+    # established-by-volume shortcut is denied, so it's treated as untrusted.
+    d = eng.evaluate(mk(800, _SPAM, account_age_days=14, server_age_days=0.0,
+                        msg_count=500, active_days=1,
+                        external_invite=True, invite_urls=("discord.gg/x",)))
+    assert d.action == Action.PUNITIVE
+
+
+def test_real_member_with_spread_activity_is_still_protected(mk):
+    eng = Engine(Policy(mode=Mode.ENFORCE))
+    eng.add_known_bad(1, _SPAM)
+    d = eng.evaluate(mk(801, _SPAM, account_age_days=90, server_age_days=0.0,
+                        msg_count=500, active_days=30,
+                        external_invite=True, invite_urls=("discord.gg/x",)))
+    assert d.action == Action.HOLD          # established → anomaly review
+    assert d.action < Action.PUNITIVE
+
+
+# ── Understaffed servers: don't let HOLDs sit (critique: queue nobody works) ──
+
+def test_unattended_holds_can_be_quarantined(mk):
+    base = dict(account_age_days=30, server_age_days=0.0, msg_count=0,
+                external_invite=True, invite_urls=("discord.gg/x",))
+    # Default: an older non-trusted account with one key is held for review.
+    eng = Engine(Policy(mode=Mode.ENFORCE))
+    assert eng.evaluate(mk(900, "see discord.gg/x", **base)).action == Action.HOLD
+    # Opt-in: convert that HOLD into a reversible quarantine for thin moderation.
+    eng2 = Engine(Policy(mode=Mode.ENFORCE, quarantine_unattended_holds=True))
+    assert eng2.evaluate(mk(901, "see discord.gg/x", **base)).action == Action.QUARANTINE
+
+
+def test_review_rate_telemetry_warns_of_queue_growth(mk):
+    eng = Engine(Policy(mode=Mode.SHADOW))
+    for i in range(5):
+        eng.evaluate(mk(950 + i, "join discord.gg/x", guild_id=3, external_invite=True,
+                        invite_urls=("discord.gg/x",), message_id=950 + i))
+    r = eng.readiness(3)
+    assert r.would_review >= 1
+    assert 0 < r.review_rate <= 1

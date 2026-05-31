@@ -7,7 +7,7 @@ import pytest
 from goodfaith import Account, Message
 
 _ACCOUNT_FIELDS = {
-    "account_age_days", "server_age_days", "msg_count",
+    "account_age_days", "server_age_days", "msg_count", "active_days",
     "has_avatar", "is_staff", "reputation_override",
 }
 
