@@ -5,6 +5,39 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-31
+
+A second adversarial ("rainbow teaming") pass. Every change verified to keep the
+false-positive rate at 0 on the corpus; data-backed limitations are documented
+rather than papered over.
+
+### Fixed
+- **Obfuscated invites dodged the invite signal.** `discord dot gg/x` was only a
+  LOW link, not a HIGH invite key. Invite detection now sees through the same
+  dot-obfuscation the link scanner already handled.
+- **Diacritic/combining-mark obfuscation defeated matching.** `fŕéé` no longer
+  reads as different from `free`: normalization now decomposes (NFKD) and drops
+  combining marks, which also makes matching accent-insensitive.
+- **Unbounded CPU per message.** Content is length-capped before tokenizing, so a
+  giant message can't burn the event loop (an 80k-token string went 1.66s → 0.05s).
+- **Honest framing.** Removed a stray "Zero-FP design" claim from the detector
+  docstring.
+
+### Added
+- Mass-mention raids without `@everyone` are now caught: a new account pinging
+  `mass_mention_min` (default 10) distinct users plus a link/invite trips the raid
+  detector. This also makes the previously-dead `mention_count` field meaningful.
+
+### Known limitations (measured, not fixed)
+- SimHash near-duplicate / known-bad matching is inherently defeatable by
+  letter-spacing (`f r e e`), leetspeak (`fr33`), or padding with junk tokens.
+  Robust fixes (shingling, aggressive folding) would raise false positives, so
+  they are deliberately not applied. The independent invite/link/raid detectors
+  still fire on the dangerous payload regardless of text obfuscation.
+
+[Unreleased]: https://github.com/ArisRhiannon/goodfaith/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/ArisRhiannon/goodfaith/compare/v0.5.1...v0.5.2
+
 ## [0.5.1] - 2026-05-31
 
 ### Added
