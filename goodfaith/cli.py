@@ -92,20 +92,38 @@ def main(argv: list[str] | None = None) -> int:
     rp = sub.add_parser("replay", help="replay a JSONL message log in shadow mode")
     rp.add_argument("file", nargs="?", help="JSONL file (default: stdin)")
     rp.add_argument("--json", action="store_true", help="machine-readable output")
+    ev = sub.add_parser("eval", help="score the labeled corpus (or a JSONL corpus)")
+    ev.add_argument("file", nargs="?", help="labeled JSONL corpus (default: bundled)")
+    ev.add_argument("--json", action="store_true", help="machine-readable output")
+    ev.add_argument("--sweep", metavar="POLICY_FIELD",
+                    help="re-score while varying one Policy int field")
+    ev.add_argument("--values", default="1,2,3,5,8",
+                    help="comma-separated values for --sweep (ints)")
     args = parser.parse_args(argv)
 
-    if args.cmd != "replay":
-        parser.print_help()
-        return 2
+    if args.cmd == "replay":
+        engine = Engine()
+        if args.file:
+            with open(args.file, encoding="utf-8") as fh:
+                replay(fh, engine)
+        else:
+            replay(sys.stdin, engine)
+        _report(engine, args.json)
+        return 0
 
-    engine = Engine()
-    if args.file:
-        with open(args.file, encoding="utf-8") as fh:
-            replay(fh, engine)
-    else:
-        replay(sys.stdin, engine)
-    _report(engine, args.json)
-    return 0
+    if args.cmd == "eval":
+        from . import eval as _eval
+        scenarios = _eval.load_jsonl(args.file) if args.file else None
+        if args.sweep:
+            rows = _eval.sweep(args.sweep, [int(v) for v in args.values.split(",")], scenarios)
+            print(json.dumps(rows, indent=2) if args.json else "\n".join(map(str, rows)))
+            return 0
+        card = _eval.evaluate(scenarios)
+        print(json.dumps(card.as_dict(), indent=2) if args.json else card.format_text())
+        return 0
+
+    parser.print_help()
+    return 2
 
 
 if __name__ == "__main__":
