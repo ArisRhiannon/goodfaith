@@ -5,6 +5,21 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-31
+
+### Added
+- **Self-corroboration.** A single non-trusted user who splits independent
+  high-precision signals across messages within the burst window (e.g. an
+  external invite in one message and a known-bad hit in the next) is now
+  corroborated and escalated, closing the "split your signals across messages"
+  gap. It reuses the existing corroboration bar (`keys_for_punitive`) and the
+  high-precision family set `{invite, known_bad, raid}` — `neardup` is excluded,
+  so legitimate copypasta is never caught. Verified to leave the false-positive
+  rate at 0 and every benign scenario untouched.
+
+[Unreleased]: https://github.com/ArisRhiannon/goodfaith/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/ArisRhiannon/goodfaith/compare/v0.5.0...v0.5.1
+
 ## [0.5.0] - 2026-05-31
 
 Security hardening from an internal red-team pass (each fix ships with a
