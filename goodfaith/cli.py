@@ -99,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="re-score while varying one Policy int field")
     ev.add_argument("--values", default="1,2,3,5,8",
                     help="comma-separated values for --sweep (ints)")
+    ev.add_argument("--generated", action="store_true",
+                    help="score the large generated synthetic corpus (thousands of messages)")
     args = parser.parse_args(argv)
 
     if args.cmd == "replay":
@@ -113,7 +115,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "eval":
         from . import eval as _eval
-        scenarios = _eval.load_jsonl(args.file) if args.file else None
+        scenarios = _eval.load_jsonl(args.file) if args.file else (
+            _eval.generate() if args.generated else None)
         if args.sweep:
             rows = _eval.sweep(args.sweep, [int(v) for v in args.values.split(",")], scenarios)
             print(json.dumps(rows, indent=2) if args.json else "\n".join(map(str, rows)))

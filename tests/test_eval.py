@@ -47,3 +47,17 @@ def test_load_jsonl_lets_you_score_real_labeled_data(tmp_path):
     assert len(scenarios) == 1 and scenarios[0].kind == "abuse"
     card = E.evaluate(scenarios)
     assert card.abuse_scenarios == 1 and card.abuse_caught == 1
+
+
+def test_generated_corpus_holds_the_contract_at_scale():
+    card = E.evaluate(E.generate())
+    assert card.benign_messages >= 2000          # thousands, not dozens
+    assert card.false_positives == 0
+    assert card.wrongful_punishments == 0
+    assert card.recall >= 0.8
+
+
+def test_generated_corpus_is_deterministic():
+    n = len(E.corpus())
+    assert (E.generate(seed=1)[n].messages[0].content
+            == E.generate(seed=1)[n].messages[0].content)
