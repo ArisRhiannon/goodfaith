@@ -1,17 +1,26 @@
 """The goodfaith decision engine: ``Message`` → ``Decision``.
 
-Zero-FP rules:
-  * Staff and trusted/established members are NEVER punished.
+Design objective: **strongly favor precision over recall.** A wrongful action
+against a regular is treated as far more costly than letting a spam message
+linger. This is an explicit, tunable bias — not a guarantee of zero false
+positives, and it deliberately accepts a higher false-negative rate.
+
+Rules:
+  * Staff are immune. Trusted/established/vouched members are never *punished*,
+    but they are NOT a blanket bypass: a trusted account showing strongly
+    corroborated danger (e.g. a compromised account or an abused vouch) is sent
+    to human review (HOLD), not waved through.
   * Legitimate behavior (agreement, emote-only, media, emphasis, formatting,
-    high frequency) never triggers anything on its own — frequency and
-    repetition are not keys, and agreement/short content never even enters the
-    near-dup index.
+    high frequency) never triggers anything on its own. Short content never
+    enters the near-dup index, which shields pile-ons in any language.
   * A punitive (reversible, appealable timeout) action requires ``keys_for_punitive``
     HIGH keys from *independent detector families* AND a non-trusted author.
-    One key → HOLD/QUARANTINE for human review, never a punishment.
+    Crucially, a single-vector mass raid self-corroborates: when many distinct
+    low-trust accounts trip the same signal in a short window, that burst is an
+    independent family of its own. One isolated key → HOLD/QUARANTINE for review.
 
 The engine holds no discord.py dependency and stores no personal data: only
-integer IDs, 64-bit fingerprints, and per-guild counters.
+integer IDs, SimHash fingerprints, and per-guild counters.
 """
 
 from __future__ import annotations
@@ -25,6 +34,11 @@ from .policy import Policy
 from .text import near, simhash
 from .types import Account, Action, Decision, Message, Mode, Signal
 from .windows import WindowState
+
+# Signal families whose cross-user repetition indicates a raid (not benign
+# coordination). Near-duplication is excluded: identical text across users is
+# often legitimate copypasta, and is already its own (review-only) signal.
+_BURST_FAMILIES = frozenset({"invite", "known_bad", "raid"})
 
 
 @dataclass
@@ -68,7 +82,8 @@ class Engine:
         self.windows = WindowState()
         self._bad: dict[int, list[tuple[float, int]]] = {}   # guild -> [(ts, simhash)]
         self._good: dict[int, list[int]] = {}                # guild -> [simhash] (FP feedback)
-        self._vouched: dict[int, set[int]] = {}              # guild -> {user_id}
+        # guild -> {user_id -> {"actor_id", "reason", "ts"}}  (auditable)
+        self._vouched: dict[int, dict[int, dict]] = {}
         self._stats: dict[int, _Stats] = {}
 
     # ── Configuration ────────────────────────────────────────────────────
@@ -79,20 +94,36 @@ class Engine:
         return self._policies.get(guild_id, self.default_policy)
 
     # ── Trust controls ───────────────────────────────────────────────────
-    def vouch(self, guild_id: int, user_id: int) -> None:
-        """Grant a member instant, permanent trust (a mod action)."""
-        self._vouched.setdefault(guild_id, set()).add(user_id)
+    def vouch(
+        self, guild_id: int, user_id: int,
+        actor_id: int | None = None, reason: str = "", now: float | None = None,
+    ) -> None:
+        """Grant a member trust (a mod action). Recorded with who/why/when.
+
+        A vouch is NOT a blanket bypass: a vouched account that later shows
+        corroborated danger is still sent to review (see ``_decide``), which
+        contains the damage from a careless or compromised moderator vouch.
+        """
+        self._vouched.setdefault(guild_id, {})[user_id] = {
+            "actor_id": actor_id,
+            "reason": reason,
+            "ts": now if now is not None else time.time(),
+        }
 
     def unvouch(self, guild_id: int, user_id: int) -> None:
-        self._vouched.get(guild_id, set()).discard(user_id)
+        self._vouched.get(guild_id, {}).pop(user_id, None)
 
     def is_vouched(self, guild_id: int, user_id: int) -> bool:
-        return user_id in self._vouched.get(guild_id, ())
+        return user_id in self._vouched.get(guild_id, {})
+
+    def list_vouches(self, guild_id: int) -> dict[int, dict]:
+        """Return the auditable vouch ledger for a guild (user_id → metadata)."""
+        return dict(self._vouched.get(guild_id, {}))
 
     # ── Curated banks ────────────────────────────────────────────────────
     def add_known_bad(self, guild_id: int, text: str, now: float | None = None) -> bool:
         """Add a curated bad fingerprint (mod-reviewed). Entries decay (TTL)."""
-        fp = simhash(text)
+        fp = simhash(text, self.policy_for(guild_id).simhash_bits)
         if not fp:
             return False
         self._bad.setdefault(guild_id, []).append((now if now is not None else time.time(), fp))
@@ -104,7 +135,7 @@ class Engine:
         The fingerprint is added to a per-guild known-good bank that forces ALLOW
         — closing the loop so a corrected false positive never repeats.
         """
-        fp = simhash(text)
+        fp = simhash(text, self.policy_for(guild_id).simhash_bits)
         if not fp:
             return False
         self._good.setdefault(guild_id, []).append(fp)
@@ -152,7 +183,7 @@ class Engine:
         if acc.is_staff:
             return self._allow(msg, policy, "staff_immune")
 
-        fp = simhash(msg.content)
+        fp = simhash(msg.content, policy.simhash_bits)
         if self._matches_known_good(msg.guild_id, fp, policy):
             return self._finish(msg, policy, Decision(
                 Action.ALLOW, 0.0, reasons=["known_good"], allowlisted=["false_positive_feedback"]))
@@ -179,8 +210,28 @@ class Engine:
                 raw.append(s)
 
         keys = signals.keys(raw)
-        reasons = [f"{s.name}:{s.detail}" for s in raw]
         trusted = reputation.is_trusted(acc, policy) or self.is_vouched(msg.guild_id, acc.user_id)
+
+        # Cross-user burst: if other low-trust accounts are tripping the same
+        # high-precision CONTENT signal right now, that coordination corroborates
+        # a single-vector mass raid (e.g. an invite flood). Restricted to
+        # dangerous-content families on purpose — near-duplication is excluded so
+        # a legitimate copypasta/quote-chain among regulars is never escalated
+        # here. Only untrusted authors feed/trigger the burst, so a lone regular
+        # sharing one invite is never escalated this way either.
+        if keys and not trusted:
+            burst = max(
+                (self.windows.record_and_count_family_burst(
+                    msg.guild_id, acc.user_id, k.family, now, policy)
+                 for k in keys if k.family in _BURST_FAMILIES),
+                default=0,
+            )
+            bsig = signals.detect_coordinated_burst(burst, policy)
+            if bsig is not None:
+                raw.append(bsig)
+                keys = signals.keys(raw)
+
+        reasons = [f"{s.name}:{s.detail}" for s in raw]
         decision = self._decide(acc, policy, keys, raw, reasons, allow_patterns, trusted)
         return self._finish(msg, policy, decision)
 
@@ -196,8 +247,14 @@ class Engine:
             return Decision(action, 0.1 if raw else 0.0, keys=[], reasons=reasons,
                             allowlisted=allow_patterns)
 
-        # Trusted/established/vouched: never punitive — soft at most, and only if known-bad.
+        # Trusted/established/vouched: never auto-*punished*, but not a blanket
+        # bypass. Strongly corroborated danger from a trusted account most likely
+        # means a compromised account or an abused vouch → hold for human review
+        # (reversible, no penalty) rather than waving it through.
         if trusted:
+            if len(families) >= policy.keys_for_punitive:
+                return Decision(Action.HOLD, 0.7, keys=keys, reasons=reasons,
+                                allowlisted=allow_patterns, reversible=True)
             action = Action.SOFT if known_bad else Action.OBSERVE
             return Decision(action, 0.4, keys=keys, reasons=reasons, allowlisted=allow_patterns)
 
