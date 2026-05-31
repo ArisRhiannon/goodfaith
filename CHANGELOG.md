@@ -5,6 +5,21 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-05-31
+
+### Changed
+- **Evaluation corpus tripled and diversified.** `eval.generate()` now produces
+  **~8,164 benign messages** across 17 scenarios — multi-script chatter (Latin,
+  CJK, Cyrillic, Greek, Arabic, Hebrew, Thai, accented Latin), plus edge cases:
+  very long messages, markdown/code/spoilers, emphasis/caps/numbers, degenerate
+  inputs, established-veteran copypasta (trust exemption), and below-threshold
+  near-duplicates. The cardinal contract still holds: **0 false positives,
+  0 wrongful punishments**, recall 16/16. Benign scenarios are time-spread (as
+  real chatter is) so repeated templates aren't misread as coordination.
+
+[Unreleased]: https://github.com/ArisRhiannon/goodfaith/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/ArisRhiannon/goodfaith/compare/v0.6.0...v0.6.1
+
 ## [0.6.0] - 2026-05-31
 
 Rigor and honesty pass, in response to external review.

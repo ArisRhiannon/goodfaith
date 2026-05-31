@@ -69,10 +69,10 @@ Two larger, structural limitations remain by design:
   model is a liability here, only partially mitigated by anomaly-based suspension
   and cross-user burst detection. See the README threat model.
 - **Synthetic evaluation.** The bundled corpus (`goodfaith eval --generated`,
-  ~2,644 benign messages) is synthetic. 0 false positives on it is a strong
-  *regression contract*, not proof of real-world efficacy. Run `goodfaith eval
-  your_export.jsonl` on your own hand-labeled data for numbers that mean something
-  on your server.
+  ~8,164 benign messages across varied scripts, lengths, and edge cases) is
+  synthetic. 0 false positives on it is a strong *regression contract*, not proof
+  of real-world efficacy. Run `goodfaith eval your_export.jsonl` on your own
+  hand-labeled data for numbers that mean something on your server.
 
 ## Reproducing
 
