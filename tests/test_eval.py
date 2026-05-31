@@ -51,7 +51,7 @@ def test_load_jsonl_lets_you_score_real_labeled_data(tmp_path):
 
 def test_generated_corpus_holds_the_contract_at_scale():
     card = E.evaluate(E.generate())
-    assert card.benign_messages >= 2000          # thousands, not dozens
+    assert card.benign_messages >= 6000          # thousands, not dozens
     assert card.false_positives == 0
     assert card.wrongful_punishments == 0
     assert card.recall >= 0.8

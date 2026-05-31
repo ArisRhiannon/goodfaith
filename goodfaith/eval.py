@@ -187,63 +187,114 @@ def corpus() -> list[Scenario]:
     ]
 
 
-# Multilingual word pool for generated chatter (varied -> low accidental overlap).
+# Multilingual, multi-script word pool for generated chatter (high variety ->
+# negligible accidental near-duplication).
 _VOCAB = (
     "pacing soundtrack finale episode arc character development animation dialogue "
     "worldbuilding cliffhanger plot twist scene foreshadowing voice acting opening "
-    "ritmo capitulo banda sonora personaje desenlace temporada animacion guion "
-    "musik folge charakter spannung szene geschichte synchronisation handlung "
-    "ongaku enshutsu sakuga monogatari tenkai fukusen seiyuu kyara saishuukai "
-    "rythme episode personnage intrigue saison doublage scene histoire denouement "
+    "ending tension payoff arc villain protagonist subplot montage flashback "
+    "ritmo capítulo banda sonora personaje desenlace temporada animación guión cámara "
+    "musik folge charakter spannung szene geschichte synchronisation gänsehaut handlung "
+    "rythme épisode personnage intrigue saison doublage scène histoire dénouement "
     "enredo trilha elenco temporada cena reviravolta narrativa dublagem estreia "
-    "syuzhet muzyka personazh stsena razvyazka sezon ozvuchka animatsiya epizod"
+    "音楽 演出 作画 物語 展開 伏線 声優 場面 最終回 剧情 角色 动画 配乐 镜头 "
+    "음악 연출 작화 이야기 전개 성우 장면 음향 "
+    "сюжет музыка персонаж сцена развязка сезон озвучка анимация эпизод "
+    "μουσική σκηνή ιστορία χαρακτήρας πλοκή επεισόδιο "
+    "موسيقى مشهد قصة شخصية حبكة حلقة "
+    "מוזיקה סצנה סיפור דמות עלילה פרק "
+    "เพลง ฉาก เรื่อง ตัวละคร โครงเรื่อง ตอน "
+    "müzik sahne hikaye karakter bölüm nhạc cảnh truyện nhân vật tập"
 ).split()
-_AGREE = ("same this real fr w true facts based mood valid bet gg "
-          "deacuerdo cierto obvio verdad doui echt sim da evet aynen").split()
-_EMOTES = ("<:pog:1>", "🎉🎉", "😂😂😂", "<a:hype:2>🔥", "💀💀", "👀", "<:kek:3><:w:4>", "🥳🎊")
+_AGREE = ("same this real fr w ww true facts based mood valid bet gg fr fr "
+          "de cierto obvio verdad oui echt sim да evet aynen 同意 真的 そう 맞아 точно").split()
+_EMOTES = ("<:pog:1>", "🎉🎉", "😂😂😂", "<a:hype:2>🔥", "💀💀", "👀", "<:kek:3><:w:4>",
+           "🥳🎊", "❤️🩷💜", "🗿", "🤝🤝", "✨✨✨")
+_MARKDOWN = ("```py\nprint('hello world from the bot')\n```", "||spoiler tag here||",
+             "-# subtle subtext line", "> quoting an earlier message here", "**bold** _italic_")
 
 
-def generate(seed: int = 0, benign: int = 2000) -> list[Scenario]:
-    """A larger, deterministic SYNTHETIC corpus to stress the false-positive surface.
+def generate(seed: int = 0, benign: int = 6000) -> list[Scenario]:
+    """A large, deterministic SYNTHETIC corpus to stress the false-positive surface.
 
     It is STILL synthetic — only as good as these pools. It does not replace real,
     hand-labeled data (see :func:`load_jsonl`); it makes the "0 wrongful punishments"
-    regression contract bite over thousands of diverse messages instead of dozens.
+    regression contract bite over thousands of varied messages, including edge cases.
     """
     rng = random.Random(seed)
-    scenarios = list(corpus())  # keep the small, readable, curated set
+    s = list(corpus())  # keep the small, readable, curated set
 
-    # Varied multilingual chatter, one message per distinct user, timestamps spread
-    # across the near-dup window. A clean engine must act on NONE of it.
-    scenarios.append(Scenario(
-        "synthetic_chatter_firehose", "benign",
-        [_msg(3000 + i, " ".join(rng.sample(_VOCAB, 8)), mid=3000 + i, at=1000.0 + i * 2)
-         for i in range(benign)],
-        note=f"{benign} distinct multilingual messages from distinct users"))
-    # Short agreement pile-ons in many languages (the structural short-message shield).
-    scenarios.append(Scenario(
-        "agreement_firehose", "benign",
-        [_msg(20000 + i, rng.choice(_AGREE), mid=20000 + i, at=1000.0 + i) for i in range(400)]))
-    # Emote/emoji-only walls.
-    scenarios.append(Scenario(
-        "emote_firehose", "benign",
-        [_msg(30000 + i, rng.choice(_EMOTES), mid=30000 + i) for i in range(200)]))
-    # More abuse breadth: independent invite-flood raids (cross-user burst).
+    def benign_scn(name, msgs, **kw):
+        s.append(Scenario(name, "benign", msgs, **kw))
+
+    # 1. Varied multi-script chatter, distinct users, variable length, time spread.
+    benign_scn("chatter_firehose",
+               [_msg(3000 + i, " ".join(rng.sample(_VOCAB, rng.randint(6, 14))),
+                     mid=3000 + i, at=1000.0 + i * 2) for i in range(benign)],
+               note=f"{benign} distinct multi-script messages from distinct users")
+    # 2. Short agreement pile-ons in many languages (the structural short-message shield).
+    benign_scn("agreement_firehose",
+               [_msg(20000 + i, rng.choice(_AGREE), mid=20000 + i, at=1000.0 + i)
+                for i in range(900)])
+    # 3. Emote / emoji-only walls.
+    benign_scn("emote_firehose",
+               [_msg(30000 + i, rng.choice(_EMOTES), mid=30000 + i) for i in range(500)])
+    # 4. Markdown / code / spoilers / quotes (formatting must never be punished).
+    #    Spread in time (>window) so repeated templates aren't read as coordination.
+    benign_scn("markdown_firehose",
+               [_msg(31000 + i, rng.choice(_MARKDOWN) + f" {i}", mid=31000 + i,
+                     at=1000.0 + i * 16) for i in range(300)])
+    # 5. Very long messages near the length cap (distinct -> no near-dup).
+    benign_scn("long_messages",
+               [_msg(32000 + i, " ".join(rng.sample(_VOCAB, 12)) * 20 + f" unique{i}",
+                     mid=32000 + i, at=1000.0 + i * 16) for i in range(100)])
+    # 6. Emphasis runs / ALL CAPS / punctuation / numbers / versions (no real text).
+    benign_scn("emphasis_caps_numbers",
+               [_msg(33000 + i, rng.choice(["WWWWWW", "LETS GOOOO", "no no no no",
+                     "aaaaaaa", "2024 v2.0.1 build #482", "...", "?!?!?!", "gg ez"]),
+                     mid=33000 + i, at=1000.0 + i * 16) for i in range(300)])
+    # ── Threshold/trust EDGE CASES the engine must NOT act on ────────────────
+    # 7. Established veterans posting identical substantial copypasta in-window
+    #    (trusted -> OBSERVE, never an action — tests the trust exemption directly).
+    benign_scn("veteran_copypasta",
+               [_msg(34000 + i, _SPAM, mid=34000 + i, at=2000.0 + i, **_VET) for i in range(8)])
+    # 8. Only TWO distinct users near-duplicate in-window (below the 3-user threshold).
+    benign_scn("two_user_neardup",
+               [_msg(35000 + (i % 2), _SPAM, mid=35000 + i, at=3000.0 + i) for i in range(4)])
+    # 9. Degenerate inputs.
+    benign_scn("degenerate_inputs",
+               [_msg(37000 + i, c, mid=37000 + i)
+                for i, c in enumerate(["", "   ", "a", "🗿", "\u200b\u200b", "k", ".", "ok"])])
+
+    # ── More ABUSE breadth (must be acted on) ────────────────────────────────
     for r in range(5):
         base = 50000 + r * 100
-        scenarios.append(Scenario(
-            f"invite_flood_{r}", "abuse",
-            [_msg(base + i, f"join discord.gg/raid{r}", mid=base + i,
-                  ev=True, inv=(f"discord.gg/raid{r}",), at=1000.0 + i) for i in range(7)]))
-    # More evasion breadth: text-fingerprint tricks the design knowingly misses.
-    scenarios.append(Scenario("letter_spacing", "evasion",
-                              [_msg(60000, "f r e e n i t r o g i v e a w a y c l i c k")]))
-    scenarios.append(Scenario("leetspeak", "evasion",
-                              [_msg(60001, "fr33 d1sc0rd n1tr0 g1v34w4y cl1ck th3 l1nk")]))
-    scenarios.append(Scenario("padded_known_bad", "evasion",
-                              [_msg(60002, _BAD + " " + " ".join(f"w{i}" for i in range(40)))],
-                              known_bad=(_BAD,)))
-    return scenarios
+        s.append(Scenario(f"invite_flood_{r}", "abuse",
+                          [_msg(base + i, f"join discord.gg/raid{r}", mid=base + i,
+                                ev=True, inv=(f"discord.gg/raid{r}",), at=1000.0 + i)
+                           for i in range(7)]))
+    for r in range(3):  # coordinated near-dup raids (distinct newcomers, identical text)
+        base = 52000 + r * 100
+        s.append(Scenario(f"neardup_raid_{r}", "abuse",
+                          [_msg(base + i, f"{_SPAM} variant {r}", mid=base + i, at=1000.0 + i)
+                           for i in range(5)]))
+    s.append(Scenario("multi_invite_dump", "abuse",
+                      [_msg(54000, "join discord.gg/a discord.gg/b discord.gg/c", ev=True,
+                            inv=("discord.gg/a", "discord.gg/b", "discord.gg/c"))],
+                      known_bad=()))
+    s.append(Scenario("everyone_invite_raid", "abuse",
+                      [_msg(55000, "@everyone free nitro discord.gg/x", everyone=True,
+                            ev=True, inv=("discord.gg/x",), age=0.1)]))
+
+    # ── More EVASION breadth (accepted, reported misses) ─────────────────────
+    s.append(Scenario("letter_spacing", "evasion",
+                      [_msg(60000, "f r e e n i t r o g i v e a w a y c l i c k")]))
+    s.append(Scenario("leetspeak", "evasion",
+                      [_msg(60001, "fr33 d1sc0rd n1tr0 g1v34w4y cl1ck th3 l1nk")]))
+    s.append(Scenario("padded_known_bad", "evasion",
+                      [_msg(60002, _BAD + " " + " ".join(f"w{i}" for i in range(40)))],
+                      known_bad=(_BAD,)))
+    return s
 
 
 def evaluate(scenarios: list[Scenario] | None = None, policy: Policy | None = None) -> Scorecard:
