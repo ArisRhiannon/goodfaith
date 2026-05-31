@@ -37,8 +37,10 @@ libraries. The core stores no personal data — only opaque integer IDs and SimH
 fingerprints.
 
 > It is a clean-room, standalone rework of the private automod that runs on a
-> real ~1,200-member community. See **[field validation](docs/METHODOLOGY.md)**
-> — including, honestly, what that validation does *not* cover.
+> real ~1,200-member community. Replayed in shadow over **one month of that
+> community's real logs (191,943 messages): 0 would-be automatic punishments,
+> 5 messages (0.003%) flagged for review.** See **[field validation](docs/METHODOLOGY.md)**
+> for the honest scope — it validates precision, not recall.
 
 ## Why it (almost) never false-positives
 

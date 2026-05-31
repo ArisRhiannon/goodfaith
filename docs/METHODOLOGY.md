@@ -31,6 +31,37 @@ engine against your actual community before giving it any power.
   agreement lexicon, substantial-content gating for near-dup, and the
   requirement of corroboration from independent families before any timeout.
 
+## What the shadow replay measured (real numbers)
+
+The narrative above is now backed by a concrete re-run. The engine in this
+repository was replayed, in `Mode.SHADOW`, over **one month of that community's
+real logged messages** — link/invite signals derived with
+[`extract.classify`](../goodfaith/extract.py) and trust tiers populated from the
+real per-user message counts and tenure. Aggregate result:
+
+| metric | value |
+|--------|-------|
+| messages replayed | **191,943** over **~30 days** (~280 distinct authors) |
+| would-be automatic punishments | **0** (0.0000%) |
+| messages escalated to review (`HOLD`) | **5** (0.003%) |
+| breakdown | `ALLOW` 177,288 · `OBSERVE` 14,650 · `HOLD` 5 |
+
+All 5 review escalations were a **single non-established account repeatedly
+posting an external server invite** — the textbook "let a human glance" case, not
+an automatic action. The run was deliberately **pessimistic**: it did *not* grant
+staff immunity (per-message role data wasn't in the export), so the real touch
+rate would be lower still.
+
+Honest scope of this measurement:
+- It validates the **precision / false-positive** side — the cardinal claim that
+  it does not auto-punish regulars — on real traffic, not synthetic.
+- It does **not** validate **recall**: the same log contained almost no
+  moderation ground truth (0 timeouts, 9 warnings over the month), so there was
+  essentially no real abuse to "catch". A clean community is exactly the niche,
+  but it means real recall remains unproven.
+- It is one community, one month. No message contents, usernames, or IDs from it
+  appear in this repository — only these aggregate counts.
+
 ## What this is — and is not
 
 **It is** evidence that, on a real community of this size and culture, the design

@@ -5,6 +5,22 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-05-31
+
+### Changed
+- **Real-data field validation, with numbers.** The engine was replayed in shadow
+  over **one month of a real community's logs — 191,943 messages, ~280 authors**
+  (link signals via `extract.classify`, trust tiers from real per-user counts and
+  tenure). Result: **0 would-be automatic punishments (0.0000%)** and **5 messages
+  (0.003%) escalated to review** (all one non-established account reposting an
+  external invite), run pessimistically without staff immunity. `METHODOLOGY.md`
+  now reports these aggregates (no message content, usernames, or IDs). This
+  validates the precision/false-positive claim on real traffic; recall remains
+  unproven (the log had almost no moderation ground truth).
+
+[Unreleased]: https://github.com/ArisRhiannon/goodfaith/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/ArisRhiannon/goodfaith/compare/v0.6.1...v0.6.2
+
 ## [0.6.1] - 2026-05-31
 
 ### Changed
