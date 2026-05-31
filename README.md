@@ -3,7 +3,7 @@
 > A trust-first Discord automod for tight-knit communities. It treats muting a regular as far worse than missing a spammer — and makes that trade-off **explicit, tunable, and auditable**.
 
 [![CI](https://github.com/ArisRhiannon/goodfaith/actions/workflows/ci.yml/badge.svg)](https://github.com/ArisRhiannon/goodfaith/actions/workflows/ci.yml)
-[![License: AGPL-3.0 + Commercial](https://img.shields.io/badge/license-AGPL--3.0%20%2B%20Commercial-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Most automods optimize for catching spam. In a tight-knit community that is the
 wrong objective: a single wrongful mute of a long-time regular does more damage
@@ -223,8 +223,4 @@ moderators from an awkward apology, an optional tip is welcome at
 
 ## License
 
-Source-available — **not** OSI open source. Free under the GNU **AGPL-3.0** for
-individuals, non-profits, and organizations below **US$1M annual revenue and 50
-employees**; larger organizations require a commercial license. See [LICENSE](LICENSE).
-
-© 2026 Aris Rhiannon
+[MIT](LICENSE) © 2026 Aris Rhiannon — use it, fork it, self-host it, ship it.

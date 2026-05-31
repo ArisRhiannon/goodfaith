@@ -5,6 +5,10 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Changed
+- Relicensed under the **MIT License** (was AGPL-3.0 + commercial). goodfaith is
+  now permissively licensed for the self-hosted Discord-bot ecosystem.
+
 ## [0.2.0] - 2026-05-31
 
 Hardening release in response to a technical critique. Sharpens both the honesty
