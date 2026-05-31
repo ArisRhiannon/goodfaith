@@ -21,6 +21,12 @@ Rules:
 
 The engine holds no discord.py dependency and stores no personal data: only
 integer IDs, SimHash fingerprints, and per-guild counters.
+
+Concurrency: the engine mutates in-memory state without locking. It assumes a
+single event loop (the discord.py model — ``on_message`` handlers do not run in
+parallel). Do not share one Engine across OS threads; give each thread/process
+its own, or add your own lock. Curated state survives restarts via
+``export_state``/``load_state``; the sliding windows are intentionally ephemeral.
 """
 
 from __future__ import annotations
@@ -167,6 +173,29 @@ class Engine:
         if not fp:
             return False
         return any(near(fp, f, policy.simhash_max_hamming) for f in self._good.get(guild_id, ()))
+
+    # ── Persistence ──────────────────────────────────────────────────────
+    def export_state(self) -> dict:
+        """JSON-serializable snapshot of CURATED state (survives restarts).
+
+        Includes vouches and the known-bad/known-good banks — the operator's
+        investment. Excludes the sliding windows and counters, which are
+        intentionally ephemeral. Persist this and replay it with load_state()."""
+        return {
+            "vouched": {str(g): {str(u): v for u, v in users.items()}
+                        for g, users in self._vouched.items()},
+            "known_bad": {str(g): [[ts, fp] for ts, fp in e] for g, e in self._bad.items()},
+            "known_good": {str(g): list(fps) for g, fps in self._good.items()},
+        }
+
+    def load_state(self, state: dict) -> None:
+        """Restore a snapshot produced by export_state()."""
+        for g, users in state.get("vouched", {}).items():
+            self._vouched[int(g)] = {int(u): v for u, v in users.items()}
+        for g, entries in state.get("known_bad", {}).items():
+            self._bad[int(g)] = [(float(ts), int(fp)) for ts, fp in entries]
+        for g, fps in state.get("known_good", {}).items():
+            self._good[int(g)] = [int(x) for x in fps]
 
     # ── Telemetry ────────────────────────────────────────────────────────
     def readiness(self, guild_id: int) -> ReadinessReport:
