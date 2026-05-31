@@ -5,6 +5,14 @@
 [![CI](https://github.com/ArisRhiannon/goodfaith/actions/workflows/ci.yml/badge.svg)](https://github.com/ArisRhiannon/goodfaith/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+**TL;DR** — a precision-first automod for **small-to-mid, tight-knit communities**
+(hundreds to a few thousand members). It is tuned so that wrongly muting a regular
+is the expensive failure, which means it **deliberately lets some spam through**.
+
+- ✅ **Good fit** if trust is your scarce resource and a wrongful mute is worse than slow spam.
+- ⚠️ **Not** for 50k+ servers or sophisticated adversaries without first reading the **[threat model & non-goals](#threat-model--non-goals)**.
+- 🔍 Honest about limits: the **[red-team report](docs/REDTEAM.md)** lists what it misses; **[evaluation](#evaluation)** has the numbers.
+
 Most automods optimize for catching spam. In a tight-knit community that is the
 wrong objective: a single wrongful mute of a long-time regular does more damage
 to trust than ten spam messages that linger for a few extra seconds. **goodfaith
@@ -21,8 +29,11 @@ The decision engine is decoupled from discord.py (the integration lives in a thi
 adapter, e.g. [`examples/discord_adapter.py`](examples/discord_adapter.py)). That
 separation is the point, not a dependency-count badge: it lets the engine be
 unit-tested deterministically without a live bot, replayed over exported logs,
-and reused with any chat library. The core happens to need no third-party runtime
-packages, and it stores no personal data — only opaque integer IDs and SimHash
+and reused with any chat library. Keeping the core free of third-party runtime
+packages is a **deliberate boundary** that protects that testability — not a
+virtue in itself, and explicitly not a promise to hand-roll complex parsing:
+non-trivial work (HTML, rich link analysis) belongs in the adapter with vetted
+libraries. The core stores no personal data — only opaque integer IDs and SimHash
 fingerprints.
 
 > It is a clean-room, standalone rework of the private automod that runs on a
@@ -45,10 +56,6 @@ Five independent guardrails, any one of which is usually enough to spare a regul
    (`ALLOW → OBSERVE → SOFT → QUARANTINE → HOLD → PUNITIVE`) and most stop early.
 3. **Corroboration from independent sources.** A timeout requires multiple HIGH
    signals from *different detector families* (e.g. an external invite **and**
-   coordinated cross-user duplication). One signal is only ever held for human
-   review — never an automatic punishment.
-3. **Corroboration from independent sources.** A timeout requires multiple HIGH
-   signals from *different detector families* (e.g. an external invite **and**
    coordinated cross-user duplication). One isolated signal is only ever held
    for human review — never an automatic punishment. A single-vector mass raid
    still escalates, because *many distinct fresh accounts tripping the same
@@ -59,8 +66,11 @@ Five independent guardrails, any one of which is usually enough to spare a regul
    communities talk: agreement pile-ons (`same`, `this`, `W`, `fr`), emote/GIF
    walls, emphasis (`WWWW`), one-thought-per-message texting, and markdown. The
    word list is an English-internet default you can replace per locale; the
-   primary shield is *structural and language-agnostic* — short messages never
-   enter the duplicate index, so pile-ons in any language are safe.
+   primary shield is *structural* and language-independent **for short content** —
+   short messages never enter the duplicate index, so brief pile-ons in any
+   language are safe. It does **not** claim to understand longer multilingual
+   coordination: substantial block-copypasta in any language goes through the
+   (review-only) near-dup path rather than getting a free pass.
 5. **Reversible actions only.** The single punitive action is a temporary,
    appealable timeout; everything else is a delete that stays in your logs.
    (Reversibility limits damage; it does not erase the experience of a wrongful
@@ -157,7 +167,18 @@ goodfaith evaluation scorecard
   known evasions hit : 0/2 (by design, these are accepted misses)
 ```
 
-And it turns threshold choices into data instead of vibes — here the FP cliff
+And it scales: `goodfaith eval --generated` replays a larger, deterministic
+**synthetic** corpus and the cardinal contract holds across it —
+
+```text
+$ goodfaith eval --generated
+  benign scenarios   : 11 (2644 messages)
+  FALSE POSITIVES    : 0  (rate 0.0000)
+  WRONGFUL PUNISH.   : 0   <- cardinal metric, target 0
+  abuse recall       : 11/11 (1.00)
+```
+
+It also turns threshold choices into data instead of vibes — here the FP cliff
 that justifies the conservative `neardup_min_tokens=5` default:
 
 ```text
@@ -167,17 +188,18 @@ $ goodfaith eval --sweep neardup_min_tokens --values 1,3,5
 {'neardup_min_tokens': 5, 'recall': 1.0, 'fp_rate': 0.000, 'wrongful_punishments': 0}
 ```
 
-**Read these numbers honestly.** The corpus is **synthetic** and small (15
-scenarios, 44 benign messages), hand-written by the author. A 1.00 recall just
-means it catches *unsubtle* attacks; the two `evasion` scenarios — a fully
-trusted account's first malicious invite, and a lone non-allowlisted link — are
-missed **on purpose**, and the harness reports that rather than hiding it. So the
-real value here is threefold: (1) a hard regression contract — *zero* wrongful
-punishments and *zero* false positives on benign traffic, enforced in CI;
-(2) a reusable scorer that ingests **your** hand-labeled export
-(`goodfaith eval your_corpus.jsonl`) so you can get numbers that mean something on
-your server; (3) a sweep that finds the knee on real data. It is not, and does
-not claim to be, proof of real-world efficacy against a determined adversary.
+**Read these numbers honestly.** *The corpus is synthetic* — both the small
+curated set and the ~2,644-message generated one are written/generated by the
+author, not sampled from real communities. "0 false positives over 2,644 synthetic
+messages" is a strong **regression contract**, not proof of real-world efficacy:
+synthetic numbers are only as good as the corpus. A 1.00 recall just means it
+catches *unsubtle* attacks; the `evasion` scenarios (letter-spacing, leetspeak,
+padding, a trusted account's first invite, a lone link) are missed **on purpose**
+and reported, not hidden — see the **[red-team report](docs/REDTEAM.md)**. The
+real value is threefold: (1) a hard regression contract enforced in CI; (2) a
+reusable scorer that ingests **your** hand-labeled export
+(`goodfaith eval your_corpus.jsonl`) for numbers that actually mean something on
+your server; (3) a sweep that finds the knee on real data.
 
 ## Tuning (per guild)
 
