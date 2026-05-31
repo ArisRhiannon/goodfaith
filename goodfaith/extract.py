@@ -49,10 +49,11 @@ def classify(content: str, *, own_invite_codes: tuple[str, ...] = (),
     never also counted as unsafe links.
     """
     content = content or ""
+    deobf = _DEOBF.sub(".", content)  # see through "discord dot gg/x" etc.
     own = {c.lower() for c in own_invite_codes}
     invites: list[str] = []
     external = False
-    for m in _INVITE.finditer(content):
+    for m in _INVITE.finditer(deobf):
         invites.append(m.group(0))
         if m.group(1).lower() not in own:
             external = True
@@ -68,9 +69,8 @@ def classify(content: str, *, own_invite_codes: tuple[str, ...] = (),
             unsafe.append(url)
             seen.add(host)
 
-    # Scheme-less / obfuscated domains: scan with URLs+invites stripped and the
-    # common dot-obfuscations normalized. LOW signal by design (never a key alone).
-    leftover = _DEOBF.sub(".", _INVITE.sub(" ", _URL.sub(" ", content)))
+    # Scheme-less domains: scan with URLs+invites stripped (LOW signal by design).
+    leftover = _INVITE.sub(" ", _URL.sub(" ", deobf))
     for m in _BARE.finditer(leftover):
         host = m.group(1).lower().removeprefix("www.")
         if host not in safe and host not in seen:
